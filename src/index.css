@@ -1,0 +1,50 @@
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: oklch(97.5% 0.006 230);
+  -webkit-font-smoothing: antialiased;
+}
+
+input,
+select,
+button {
+  font-family: inherit;
+}
+
+a {
+  color: oklch(45% 0.13 230);
+}
+
+a:hover {
+  color: oklch(38% 0.14 230);
+}
+
+::placeholder {
+  color: oklch(62% 0.01 230);
+}
