@@ -17,64 +17,42 @@ import BulkDueDateModal from './components/modals/BulkDueDateModal';
 import AddExpenseModal from './components/modals/AddExpenseModal';
 import AddAdminModal from './components/modals/AddAdminModal';
 import { brl, initials, seeded, multaFor, STATUS_META } from './utils/format';
+import { sameMonth, MONTH_NAMES_PT } from './utils/date';
+import { supabase } from './lib/supabaseClient';
+import { signIn, signUp, signOut, fetchProfile } from './lib/auth';
+import {
+  fetchAssociados, insertAssociado, updateAssociado, deleteAssociado,
+  fetchDespesas, insertDespesa, updateDespesa, deleteDespesa, uploadReceipt,
+  fetchAdmins, insertAdmin, deleteAdmin,
+  fetchOwnAssociado, fetchFaturasByAssociado, insertFatura, markFaturasPaid,
+} from './lib/db';
 
 const INITIAL_STATE = {
-  screen: 'login', loginRole: 'admin', role: 'admin',
+  // autenticação
+  session: undefined, // undefined = ainda não checou; null = deslogado; objeto = logado
+  profile: null,
+  authError: null,
+
+  // dados carregados do banco
+  dataLoading: false,
+  associados: [], despesas: [], admins: [], // papel admin
+  ownAssociado: null, faturas: [], // papel associado
+
+  // navegação / UI
   adminPage: 'dashboard', assocPage: 'inicio', payMethod: 'pix',
   toast: null,
   showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
   newAssociado: { name: '', unit: '', email: '', value: 80 },
-  newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo' },
+  newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null },
   editingExpenseId: null,
   associadoSearch: '', associadoPage: 0, associadoPageSize: 5,
   isMobile: false,
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
-  cobrancasEnviadas: {},
   showBulkDueDate: false, bulkDueDate: '10/08',
   showViewProfile: false, viewProfileId: null,
   showEditProfile: false, editProfileDraft: { name: '', email: '', phone: '', address: '' },
-  assocInvoices: [
-    { id: 101, month: 'Maio/2026', value: 78.0, dueDate: '10/05/2026', status: 'atrasado' },
-    { id: 102, month: 'Junho/2026', value: 85.5, dueDate: '10/06/2026', status: 'atrasado' },
-    { id: 103, month: 'Julho/2026', value: 85.5, dueDate: '10/07/2026', status: 'pendente' },
-  ],
-  selectedInvoiceIds: { 101: true, 102: true, 103: true },
-  billingMonthNames: ['Agosto/2026', 'Setembro/2026', 'Outubro/2026', 'Novembro/2026', 'Dezembro/2026'],
-  billingDueDates: ['10/08/2026', '10/09/2026', '10/10/2026', '10/11/2026', '10/12/2026'],
-  billingMonthIndex: 0,
-  associados: [
-    { id: 1, name: 'Ana Beatriz Souza', unit: 'Lote 12', email: 'ana.souza@email.com', phone: '(11) 98211-4432', address: 'Rua das Palmeiras, 120 — Lote 12', value: 85.5, consumption: 14, dueDate: '10/07', status: 'pago' },
-    { id: 2, name: 'Carlos Eduardo Lima', unit: 'Lote 03', email: 'carlos.lima@email.com', phone: '(11) 97432-1190', address: 'Rua das Palmeiras, 45 — Lote 03', value: 70.9, consumption: 9, dueDate: '10/07', status: 'atrasado' },
-    { id: 3, name: 'Fernanda Rocha', unit: 'Lote 18', email: 'fernanda.rocha@email.com', phone: '(11) 99123-8820', address: 'Estrada do Rio Verde, 340 — Lote 18', value: 95.25, consumption: 21, dueDate: '10/07', status: 'pago' },
-    { id: 4, name: 'João Pedro Alves', unit: 'Lote 07', email: 'joao.alves@email.com', phone: '(11) 98877-2231', address: 'Rua das Palmeiras, 80 — Lote 07', value: 75.0, consumption: 11, dueDate: '10/07', status: 'pendente' },
-    { id: 5, name: 'Marina Costa', unit: 'Lote 22', email: 'marina.costa@email.com', phone: '(11) 96654-9012', address: 'Estrada do Rio Verde, 410 — Lote 22', value: 60.75, consumption: 8, dueDate: '10/07', status: 'pago' },
-    { id: 6, name: 'Rafael Nunes', unit: 'Lote 15', email: 'rafael.nunes@email.com', phone: '(11) 99887-3345', address: 'Rua das Palmeiras, 200 — Lote 15', value: 88.3, consumption: 17, dueDate: '10/07', status: 'atrasado' },
-    { id: 7, name: 'Sofia Martins', unit: 'Lote 09', email: 'sofia.martins@email.com', phone: '(11) 98123-5567', address: 'Rua das Palmeiras, 95 — Lote 09', value: 72.4, consumption: 12, dueDate: '10/07', status: 'pago' },
-    { id: 8, name: 'Gustavo Pereira', unit: 'Lote 30', email: 'gustavo.pereira@email.com', phone: '(11) 97711-6689', address: 'Estrada do Rio Verde, 520 — Lote 30', value: 90.6, consumption: 19, dueDate: '10/07', status: 'pendente' },
-    { id: 9, name: 'Beatriz Fernandes', unit: 'Lote 05', email: 'beatriz.f@email.com', phone: '(11) 98456-2278', address: 'Rua das Palmeiras, 60 — Lote 05', value: 65.15, consumption: 10, dueDate: '10/07', status: 'pago' },
-    { id: 10, name: 'Lucas Barbosa', unit: 'Lote 27', email: 'lucas.barbosa@email.com', phone: '(11) 99234-8801', address: 'Estrada do Rio Verde, 480 — Lote 27', value: 78.85, consumption: 13, dueDate: '10/07', status: 'pago' },
-  ],
-  expenses: [
-    { id: 1, date: '02/07', description: "Manutenção da bomba d'água", category: 'Manutenção', value: 420, receipt: 'nf-bomba-0207.pdf' },
-    { id: 2, date: '05/07', description: 'Conta de energia da estação', category: 'Energia', value: 310, receipt: 'conta-energia-jul.pdf' },
-    { id: 3, date: '08/07', description: 'Cloro e material de tratamento', category: 'Material', value: 185, receipt: 'nf-material-0807.pdf' },
-    { id: 4, date: '11/07', description: "Serviço de limpeza da caixa d'água", category: 'Serviços', value: 250, receipt: 'recibo-limpeza.pdf' },
-    { id: 5, date: '13/07', description: 'Reparo de vazamento na rede', category: 'Manutenção', value: 390, receipt: 'nf-reparo-1307.pdf' },
-  ],
-  admins: [
-    { id: 1, name: 'Roberto Cardoso', email: 'roberto.cardoso@associacao.org', cargo: 'Administrador Geral' },
-    { id: 2, name: 'Patrícia Mendes', email: 'patricia.mendes@associacao.org', cargo: 'Financeiro' },
-  ],
+  selectedInvoiceIds: {},
 };
-
-const PAYMENT_HISTORY_DATA = [
-  { ref: 'Jun/2026', value: 85, method: 'Pix', status: 'pago' },
-  { ref: 'Mai/2026', value: 80, method: 'Boleto', status: 'pago' },
-  { ref: 'Abr/2026', value: 80, method: 'Pix', status: 'pago' },
-  { ref: 'Mar/2026', value: 78, method: 'Boleto', status: 'pago' },
-  { ref: 'Fev/2026', value: 78, method: 'Pix', status: 'pago' },
-  { ref: 'Jan/2026', value: 75, method: 'Boleto', status: 'pago' },
-];
 
 function useMergeState(initial) {
   const [state, setStateRaw] = useState(initial);
@@ -87,6 +65,7 @@ function useMergeState(initial) {
 export default function App() {
   const [state, setState] = useMergeState(INITIAL_STATE);
   const toastTimer = useRef(null);
+  const s = state;
 
   const showToast = useCallback(
     (msg) => {
@@ -97,6 +76,7 @@ export default function App() {
     [setState],
   );
 
+  // --- viewport ---
   useEffect(() => {
     const updateViewport = () => setState({ isMobile: window.innerWidth < 860 });
     updateViewport();
@@ -104,18 +84,66 @@ export default function App() {
     return () => window.removeEventListener('resize', updateViewport);
   }, [setState]);
 
-  const s = state;
+  // --- sessão do Supabase ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setState({ session: data.session }));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setState({ session: newSession });
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [setState]);
 
-  // --- handlers ---
-  const setAssociadoSearch = (e) => setState({ associadoSearch: e.target.value, associadoPage: 0 });
-  const goAssociadoPrevPage = () => setState((p) => ({ associadoPage: Math.max(0, p.associadoPage - 1) }));
-  const goAssociadoNextPage = () => setState((p) => ({ associadoPage: p.associadoPage + 1 }));
+  // --- perfil do usuário logado ---
+  useEffect(() => {
+    if (!s.session) {
+      setState({ profile: null });
+      return;
+    }
+    let active = true;
+    fetchProfile(s.session.user.id)
+      .then((p) => { if (active) setState({ profile: p }); })
+      .catch((err) => { if (active) showToast('Erro ao carregar perfil: ' + err.message); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.session?.user?.id]);
 
-  const doLogin = () => setState((p) => ({ screen: 'app', role: p.loginRole }));
-  const doLogout = () => setState({ screen: 'login' });
-  const setLoginRoleAdmin = () => setState({ loginRole: 'admin' });
-  const setLoginRoleAssoc = () => setState({ loginRole: 'associado' });
+  // --- dados conforme o papel do usuário ---
+  useEffect(() => {
+    if (!s.profile) return;
+    let active = true;
+    setState({ dataLoading: true });
+    (async () => {
+      try {
+        if (s.profile.role === 'admin') {
+          const [associados, despesas, admins] = await Promise.all([fetchAssociados(), fetchDespesas(), fetchAdmins()]);
+          if (!active) return;
+          setState({ associados, despesas, admins, dataLoading: false });
+        } else {
+          const own = await fetchOwnAssociado(s.profile.id);
+          if (!active) return;
+          const faturas = own ? await fetchFaturasByAssociado(own.id) : [];
+          if (!active) return;
+          setState({ ownAssociado: own, faturas, dataLoading: false });
+        }
+      } catch (err) {
+        if (!active) return;
+        setState({ dataLoading: false });
+        showToast('Erro ao carregar dados: ' + err.message);
+      }
+    })();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.profile?.id, s.profile?.role]);
 
+  // --- auth handlers ---
+  const doSignIn = async ({ email, password }) => signIn({ email, password });
+  const doSignUp = async ({ email, password, name, role }) => signUp({ email, password, name, role });
+  const doLogout = async () => {
+    await signOut();
+    setState({ associados: [], despesas: [], admins: [], ownAssociado: null, faturas: [], adminPage: 'dashboard', assocPage: 'inicio' });
+  };
+
+  // --- navegação ---
   const goAdminDashboard = () => setState({ adminPage: 'dashboard' });
   const goAdminAssociados = () => setState({ adminPage: 'associados' });
   const goAdminDespesas = () => setState({ adminPage: 'despesas' });
@@ -127,87 +155,171 @@ export default function App() {
   const setPayPix = () => setState({ payMethod: 'pix' });
   const setPayBoleto = () => setState({ payMethod: 'boleto' });
 
+  const setAssociadoSearch = (e) => setState({ associadoSearch: e.target.value, associadoPage: 0 });
+  const goAssociadoPrevPage = () => setState((p) => ({ associadoPage: Math.max(0, p.associadoPage - 1) }));
+  const goAssociadoNextPage = () => setState((p) => ({ associadoPage: p.associadoPage + 1 }));
+
+  // --- associados (admin) ---
   const openAddAssociado = () => setState({ showAddAssociado: true, newAssociado: { name: '', unit: '', email: '', value: 80 } });
   const closeAddAssociado = () => setState({ showAddAssociado: false });
   const setNewAssociadoName = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, name: e.target.value } }));
   const setNewAssociadoUnit = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, unit: e.target.value } }));
   const setNewAssociadoEmail = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, email: e.target.value } }));
   const setNewAssociadoValue = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, value: parseFloat(e.target.value) || 0 } }));
-  const confirmAddAssociado = () => {
+  const confirmAddAssociado = async () => {
     const n = s.newAssociado;
     if (!n.name.trim()) return;
-    const a = { id: Date.now(), name: n.name, unit: n.unit || '—', email: n.email || '—', phone: '—', address: '—', value: n.value || 0, consumption: 0, dueDate: '10/07', status: 'pendente' };
-    setState((p) => ({ associados: [...p.associados, a], showAddAssociado: false }));
-    showToast('Associado adicionado');
+    try {
+      const a = await insertAssociado(n);
+      setState((p) => ({ associados: [...p.associados, a], showAddAssociado: false }));
+      showToast('Associado adicionado');
+    } catch (err) {
+      showToast('Erro ao adicionar associado: ' + err.message);
+    }
   };
 
-  const openAddExpense = () => setState({ showAddExpense: true, editingExpenseId: null, newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo' } });
+  const openViewProfile = (id) => setState({ showViewProfile: true, viewProfileId: id });
+  const closeViewProfile = () => setState({ showViewProfile: false });
+
+  const enviarCobranca = (id, name) => {
+    const a = s.associados.find((x) => x.id === id);
+    if (a && sameMonth(a.lastChargeSentAt)) return;
+    const now = new Date().toISOString();
+    setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, lastChargeSentAt: now } : x)) }));
+    updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + err.message));
+    showToast(`Cobrança enviada para ${name} — só é possível cobrar 1x por mês`);
+  };
+  const cobrarTodos = () => {
+    const pendentes = s.associados.filter((a) => a.status !== 'pago' && !sameMonth(a.lastChargeSentAt));
+    if (pendentes.length === 0) { showToast('Todas as cobranças do mês já foram enviadas'); return; }
+    const now = new Date().toISOString();
+    const ids = new Set(pendentes.map((a) => a.id));
+    setState((p) => ({ associados: p.associados.map((a) => (ids.has(a.id) ? { ...a, lastChargeSentAt: now } : a)) }));
+    Promise.all(pendentes.map((a) => updateAssociado(a.id, { lastChargeSentAt: now }))).catch((err) => showToast('Erro: ' + err.message));
+    showToast(`Cobrança enviada para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'}`);
+  };
+
+  const openBulkDueDate = () => setState({ showBulkDueDate: true });
+  const closeBulkDueDate = () => setState({ showBulkDueDate: false });
+  const setBulkDueDate = (e) => setState({ bulkDueDate: e.target.value });
+  const confirmBulkDueDate = async () => {
+    const d = s.bulkDueDate;
+    if (!d.trim()) return;
+    const prev = s.associados;
+    setState((p) => ({ associados: p.associados.map((a) => ({ ...a, dueDate: d })), showBulkDueDate: false }));
+    try {
+      await Promise.all(prev.map((a) => updateAssociado(a.id, { dueDate: d })));
+      showToast(`Vencimento atualizado para ${d} em todos os associados`);
+    } catch (err) {
+      showToast('Erro: ' + err.message);
+    }
+  };
+
+  const generateMonthlyCharges = async () => {
+    const now = new Date();
+    const monthLabel = `${MONTH_NAMES_PT[now.getMonth()]}/${now.getFullYear()}`;
+    const dueDateIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
+    const dueDateShort = `10/${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const list = s.associados;
+    try {
+      await Promise.all(list.map((a) => insertFatura({ associadoId: a.id, month: monthLabel, value: a.value, dueDateIso, status: 'pendente' })));
+      await Promise.all(list.map((a) => updateAssociado(a.id, { dueDate: dueDateShort })));
+      setState((p) => ({ associados: p.associados.map((a) => ({ ...a, status: 'pendente', dueDate: dueDateShort })) }));
+      showToast(`Cobranças de ${monthLabel} geradas para ${list.length} associados`);
+    } catch (err) {
+      showToast('Erro: ' + err.message);
+    }
+  };
+
+  // --- despesas (admin) ---
+  const openAddExpense = () => setState({ showAddExpense: true, editingExpenseId: null, newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null } });
   const openEditExpense = (exp) =>
     setState({
       showAddExpense: true,
       editingExpenseId: exp.id,
-      newExpense: { description: exp.description, category: exp.category, value: exp.value, receiptLabel: exp.receipt && exp.receipt !== 'sem-comprovante' ? '✓ ' + exp.receipt : '+ Anexar arquivo' },
+      newExpense: { description: exp.description, category: exp.category, value: exp.value, receiptLabel: exp.receiptPath ? '✓ ' + exp.receipt : '+ Anexar arquivo', receiptPath: exp.receiptPath },
     });
   const closeAddExpense = () => setState({ showAddExpense: false, editingExpenseId: null });
   const setNewExpenseDescription = (e) => setState((p) => ({ newExpense: { ...p.newExpense, description: e.target.value } }));
   const setNewExpenseCategory = (e) => setState((p) => ({ newExpense: { ...p.newExpense, category: e.target.value } }));
   const setNewExpenseValue = (e) => setState((p) => ({ newExpense: { ...p.newExpense, value: e.target.value } }));
-  const handleReceiptFile = (e) => {
+  const handleReceiptFile = async (e) => {
     const f = e.target.files && e.target.files[0];
-    if (f) setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: '✓ ' + f.name } }));
+    if (!f) return;
+    setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: 'Enviando...' } }));
+    try {
+      const path = await uploadReceipt(f);
+      setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: '✓ ' + f.name, receiptPath: path } }));
+    } catch (err) {
+      setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: '+ Anexar arquivo' } }));
+      showToast('Erro ao enviar arquivo: ' + err.message);
+    }
   };
-  const confirmAddExpense = () => {
+  const confirmAddExpense = async () => {
     const n = s.newExpense;
     if (!n.description.trim() || !n.value) return;
-    const receipt = n.receiptLabel.startsWith('✓') ? n.receiptLabel.slice(2) : 'sem-comprovante';
-    if (s.editingExpenseId) {
-      setState((p) => ({
-        expenses: p.expenses.map((x) => (x.id === p.editingExpenseId ? { ...x, description: n.description, category: n.category, value: parseFloat(n.value) || 0, receipt } : x)),
-        showAddExpense: false,
-        editingExpenseId: null,
-      }));
-      showToast('Despesa atualizada');
-    } else {
-      const e = { id: Date.now(), date: '15/07', description: n.description, category: n.category, value: parseFloat(n.value) || 0, receipt };
-      setState((p) => ({ expenses: [e, ...p.expenses], showAddExpense: false }));
-      showToast('Despesa lançada');
+    try {
+      if (s.editingExpenseId) {
+        const updated = await updateDespesa(s.editingExpenseId, { description: n.description, category: n.category, value: parseFloat(n.value) || 0, receiptPath: n.receiptPath });
+        setState((p) => ({ despesas: p.despesas.map((x) => (x.id === updated.id ? updated : x)), showAddExpense: false, editingExpenseId: null }));
+        showToast('Despesa atualizada');
+      } else {
+        const created = await insertDespesa({ description: n.description, category: n.category, value: parseFloat(n.value) || 0, receiptPath: n.receiptPath });
+        setState((p) => ({ despesas: [created, ...p.despesas], showAddExpense: false }));
+        showToast('Despesa lançada');
+      }
+    } catch (err) {
+      showToast('Erro: ' + err.message);
     }
   };
 
+  // --- administradores ---
   const openAddAdmin = () => setState({ showAddAdmin: true, newAdmin: { name: '', email: '', cargo: 'Administrador Geral' } });
   const closeAddAdmin = () => setState({ showAddAdmin: false });
   const setNewAdminName = (e) => setState((p) => ({ newAdmin: { ...p.newAdmin, name: e.target.value } }));
   const setNewAdminEmail = (e) => setState((p) => ({ newAdmin: { ...p.newAdmin, email: e.target.value } }));
   const setNewAdminCargo = (e) => setState((p) => ({ newAdmin: { ...p.newAdmin, cargo: e.target.value } }));
-  const confirmAddAdmin = () => {
+  const confirmAddAdmin = async () => {
     const n = s.newAdmin;
     if (!n.name.trim()) return;
-    setState((p) => ({ admins: [...p.admins, { id: Date.now(), name: n.name, email: n.email || '—', cargo: n.cargo }], showAddAdmin: false }));
-    showToast('Administrador adicionado');
+    try {
+      const created = await insertAdmin(n);
+      setState((p) => ({ admins: [...p.admins, created], showAddAdmin: false }));
+      showToast('Administrador adicionado');
+    } catch (err) {
+      showToast('Erro: ' + err.message);
+    }
   };
 
+  // --- fatura / pagamento (associado) ---
   const selectOnlyInvoice = (id) => setState({ selectedInvoiceIds: { [id]: true }, assocPage: 'pagar' });
   const goPagarTodas = () => {
     const ids = {};
-    s.assocInvoices.filter((i) => i.status !== 'pago').forEach((i) => { ids[i.id] = true; });
+    s.faturas.filter((f) => f.status !== 'pago').forEach((f) => { ids[f.id] = true; });
     setState({ selectedInvoiceIds: ids, assocPage: 'pagar' });
   };
   const toggleSelectedInvoice = (id) => setState((p) => ({ selectedInvoiceIds: { ...p.selectedInvoiceIds, [id]: !p.selectedInvoiceIds[id] } }));
-  const confirmPayment = () => {
+  const confirmPayment = async () => {
     const sel = s.selectedInvoiceIds;
-    const n = Object.keys(sel).filter((k) => sel[k]).length;
-    if (n === 0) { showToast('Selecione ao menos uma fatura'); return; }
-    const updatedInvoices = s.assocInvoices.map((i) => (sel[i.id] ? { ...i, status: 'pago' } : i));
-    const stillOpen = updatedInvoices.some((i) => i.status !== 'pago');
-    const demoId = s.associados[2].id;
-    setState((p) => ({
-      assocInvoices: updatedInvoices,
-      selectedInvoiceIds: {},
-      assocPage: 'inicio',
-      associados: p.associados.map((a) => (a.id === demoId ? { ...a, status: stillOpen ? 'pendente' : 'pago' } : a)),
-      cobrancasEnviadas: { ...p.cobrancasEnviadas, [demoId]: false },
-    }));
-    showToast(`Pagamento confirmado — ${n} fatura${n === 1 ? '' : 's'} quitada${n === 1 ? '' : 's'}`);
+    const ids = Object.keys(sel).filter((k) => sel[k]).map(Number);
+    if (ids.length === 0) { showToast('Selecione ao menos uma fatura'); return; }
+    try {
+      const updated = await markFaturasPaid(ids, s.payMethod);
+      const newFaturas = s.faturas.map((f) => updated.find((u) => u.id === f.id) || f);
+      const stillOpen = newFaturas.some((f) => f.status !== 'pago');
+      const newStatus = stillOpen ? 'pendente' : 'pago';
+      // o status persistido é recalculado automaticamente por um trigger no banco
+      // (sync_associado_status) a partir das faturas — aqui só refletimos na UI local
+      setState((p) => ({
+        faturas: newFaturas,
+        selectedInvoiceIds: {},
+        assocPage: 'inicio',
+        ownAssociado: p.ownAssociado ? { ...p.ownAssociado, status: newStatus } : p.ownAssociado,
+      }));
+      showToast(`Pagamento confirmado — ${ids.length} fatura${ids.length === 1 ? '' : 's'} quitada${ids.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      showToast('Erro: ' + err.message);
+    }
   };
   const copyPix = () => {
     try { navigator.clipboard.writeText('00020126580014BR.GOV.BCB.PIX0136assoc-aguas@pix.com.br5204000053039865802BR5913ASSOC AGUAS6009SAO PAULO62070503***6304ABCD'); } catch { /* ignore */ }
@@ -218,24 +330,13 @@ export default function App() {
     showToast('Código copiado');
   };
   const downloadBoleto = () => showToast('Download do boleto iniciado');
-  const enviarCobranca = (id, name) => {
-    if (s.cobrancasEnviadas[id]) return;
-    setState((p) => ({ cobrancasEnviadas: { ...p.cobrancasEnviadas, [id]: true } }));
-    showToast(`Cobrança enviada para ${name} — só é possível cobrar 1x por mês`);
-  };
-  const cobrarTodos = () => {
-    const pendentes = s.associados.filter((a) => a.status !== 'pago' && !s.cobrancasEnviadas[a.id]);
-    if (pendentes.length === 0) { showToast('Todas as cobranças do mês já foram enviadas'); return; }
-    const novo = { ...s.cobrancasEnviadas };
-    pendentes.forEach((a) => { novo[a.id] = true; });
-    setState({ cobrancasEnviadas: novo });
-    showToast(`Cobrança enviada para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'}`);
-  };
-  const openViewProfile = (id) => setState({ showViewProfile: true, viewProfileId: id });
-  const closeViewProfile = () => setState({ showViewProfile: false });
+  const exportPdf = () => showToast('Exportando relatório em PDF...');
+  const exportCsv = () => showToast('Exportando relatório em CSV...');
 
+  // --- perfil (associado edita o próprio) ---
   const openEditProfile = () => {
-    const p = s.associados[2];
+    const p = s.ownAssociado;
+    if (!p) return;
     setState({ showEditProfile: true, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
   };
   const closeEditProfile = () => setState({ showEditProfile: false });
@@ -243,40 +344,20 @@ export default function App() {
   const setEditProfileEmail = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, email: e.target.value } }));
   const setEditProfilePhone = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, phone: e.target.value } }));
   const setEditProfileAddress = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, address: e.target.value } }));
-  const saveEditProfile = () => {
-    const d = s.editProfileDraft;
-    const id = s.associados[2].id;
-    setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, ...d } : x)), showEditProfile: false }));
-    showToast('Perfil atualizado');
+  const saveEditProfile = async () => {
+    if (!s.ownAssociado) return;
+    try {
+      const updated = await updateAssociado(s.ownAssociado.id, s.editProfileDraft);
+      setState({ ownAssociado: updated, showEditProfile: false });
+      showToast('Perfil atualizado');
+    } catch (err) {
+      showToast('Erro: ' + err.message);
+    }
   };
 
-  const generateMonthlyCharges = () => {
-    const idx = s.billingMonthIndex % s.billingMonthNames.length;
-    const monthLabel = s.billingMonthNames[idx];
-    const dueDate = s.billingDueDates[idx].slice(0, 5);
-    const demo = s.associados[2];
-    const newInvoice = { id: Date.now(), month: monthLabel, value: demo.value, dueDate: s.billingDueDates[idx], status: 'pendente' };
-    setState((p) => ({
-      associados: p.associados.map((a) => ({ ...a, status: 'pendente', dueDate })),
-      cobrancasEnviadas: {},
-      billingMonthIndex: p.billingMonthIndex + 1,
-      assocInvoices: [...p.assocInvoices, newInvoice],
-    }));
-    showToast(`Cobranças de ${monthLabel} geradas para ${s.associados.length} associados`);
-  };
-  const openBulkDueDate = () => setState({ showBulkDueDate: true });
-  const closeBulkDueDate = () => setState({ showBulkDueDate: false });
-  const setBulkDueDate = (e) => setState({ bulkDueDate: e.target.value });
-  const confirmBulkDueDate = () => {
-    const d = s.bulkDueDate;
-    if (!d.trim()) return;
-    setState((p) => ({ associados: p.associados.map((a) => ({ ...a, dueDate: d })), showBulkDueDate: false }));
-    showToast(`Vencimento atualizado para ${d} em todos os associados`);
-  };
-  const exportPdf = () => showToast('Exportando relatório em PDF...');
-  const exportCsv = () => showToast('Exportando relatório em CSV...');
-
-  // --- derived values (mirrors renderVals() from the design prototype) ---
+  // ============================================================
+  // valores derivados (equivalente ao renderVals() do protótipo)
+  // ============================================================
   const associados = s.associados.map((a) => {
     const meta = STATUS_META[a.status];
     const isPago = a.status === 'pago';
@@ -286,19 +367,33 @@ export default function App() {
       ...a,
       initials: initials(a.name),
       valueFmt: brl(a.value),
-      multaFmt: multa > 0 ? brl(multa) : null,
       statusLabel: isAtrasado ? `${meta.label} · multa ${brl(multa)}` : meta.label,
       statusBg: meta.bg,
       statusColor: meta.color,
       onOpenProfile: () => openViewProfile(a.id),
-      onValueChange: (e) => { const v = parseFloat(e.target.value) || 0; setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, value: v } : x)) })); },
+      onValueChange: (e) => {
+        const v = parseFloat(e.target.value) || 0;
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, value: v } : x)) }));
+        updateAssociado(a.id, { value: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+      },
       dueDateColor: isAtrasado ? 'oklch(50% 0.18 25)' : 'oklch(20% 0.02 230)',
       dueDateBorder: isAtrasado ? 'oklch(75% 0.1 25)' : 'oklch(89% 0.01 230)',
-      onConsumptionChange: (e) => { const v = Number(e.target.value); setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v } : x)) })); },
-      onDelete: () => setState((p) => ({ associados: p.associados.filter((x) => x.id !== a.id) })),
-      onDueDateChange: (e) => { const v = e.target.value; setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, dueDate: v } : x)) })); },
-      showCobrar: !isPago && !s.cobrancasEnviadas[a.id],
-      showEnviado: !isPago && !!s.cobrancasEnviadas[a.id],
+      onConsumptionChange: (e) => {
+        const v = Number(e.target.value);
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v } : x)) }));
+        updateAssociado(a.id, { consumption: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+      },
+      onDelete: () => {
+        setState((p) => ({ associados: p.associados.filter((x) => x.id !== a.id) }));
+        deleteAssociado(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+      },
+      onDueDateChange: (e) => {
+        const v = e.target.value;
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, dueDate: v } : x)) }));
+        updateAssociado(a.id, { dueDate: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+      },
+      showCobrar: !isPago && !sameMonth(a.lastChargeSentAt),
+      showEnviado: !isPago && sameMonth(a.lastChargeSentAt),
       showCobrado: isPago,
       cobrarLabel: isAtrasado ? 'Cobrar novamente' : 'Cobrar',
       cobrarBg: isAtrasado ? 'oklch(93% 0.05 25)' : '#fff',
@@ -308,16 +403,31 @@ export default function App() {
     };
   });
 
-  const expenses = s.expenses.map((e) => ({ ...e, valueFmt: brl(e.value), onDelete: () => setState((p) => ({ expenses: p.expenses.filter((x) => x.id !== e.id) })), onEdit: () => openEditExpense(e) }));
-  const admins = s.admins.map((a) => ({ ...a, initials: initials(a.name), onDelete: () => setState((p) => ({ admins: p.admins.filter((x) => x.id !== a.id) })) }));
+  const expenses = s.despesas.map((e) => ({
+    ...e,
+    valueFmt: brl(e.value),
+    onDelete: () => {
+      setState((p) => ({ despesas: p.despesas.filter((x) => x.id !== e.id) }));
+      deleteDespesa(e.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+    },
+    onEdit: () => openEditExpense(e),
+  }));
+  const admins = s.admins.map((a) => ({
+    ...a,
+    initials: initials(a.name),
+    onDelete: () => {
+      setState((p) => ({ admins: p.admins.filter((x) => x.id !== a.id) }));
+      deleteAdmin(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+    },
+  }));
 
   const arrecadado = associados.filter((a) => a.status === 'pago').reduce((sum, a) => sum + a.value, 0);
   const gasto = expenses.reduce((sum, e) => sum + e.value, 0);
   const saldo = arrecadado - gasto;
   const inadimplentes = associados.filter((a) => a.status !== 'pago').length;
-  const inadimplenciaPct = Math.round((inadimplentes / associados.length) * 100);
+  const inadimplenciaPct = associados.length ? Math.round((inadimplentes / associados.length) * 100) : 0;
   const pagoCount = associados.filter((a) => a.status === 'pago').length;
-  const pagoPct = Math.round((pagoCount / associados.length) * 100);
+  const pagoPct = associados.length ? Math.round((pagoCount / associados.length) * 100) : 0;
 
   const stats = {
     arrecadadoFmt: brl(arrecadado),
@@ -328,14 +438,16 @@ export default function App() {
     pagoPct,
   };
 
+  // histórico de arrecadação real ainda não é rastreado mês a mês — mostramos
+  // o mês atual real e uma referência aproximada para os anteriores.
   const revHist = [6600, 7100, 6900, 7600, 7300, arrecadado];
-  const maxRev = Math.max(...revHist);
+  const maxRev = Math.max(...revHist, 1);
   const months = ['Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul'];
   const revenueBars = revHist.map((v, i) => ({ month: months[i], valueFmt: brl(v).replace('R$', '').trim(), heightPct: Math.round((v / maxRev) * 100), color: i === 5 ? 'oklch(45% 0.13 210)' : 'oklch(85% 0.03 220)' }));
 
   const pendenteCount = associados.filter((a) => a.status === 'pendente').length;
   const atrasadoCount = associados.filter((a) => a.status === 'atrasado').length;
-  const total = associados.length;
+  const total = associados.length || 1;
   const circumference = 2 * Math.PI * 60;
   let offsetAcc = 0;
   const segCounts = [
@@ -365,22 +477,23 @@ export default function App() {
   const modalWidth = isMobile ? '92vw' : '400px';
 
   const viewProfileData = s.viewProfileId ? associados.find((a) => a.id === s.viewProfileId) : null;
-  const assocProfile = associados[2];
-  const invoicesOpen = s.assocInvoices.filter((i) => i.status !== 'pago');
+  const assocProfile = s.ownAssociado;
+
+  const invoicesOpen = s.faturas.filter((i) => i.status !== 'pago');
   const hasOverdue = invoicesOpen.some((i) => i.status === 'atrasado');
   const totalAberto = invoicesOpen.reduce((sum, i) => sum + i.value + multaFor(i.value, i.status), 0);
   const currentInvoice = {
     valueFmt: brl(totalAberto),
     dueDate: invoicesOpen[0] ? invoicesOpen[0].dueDate : '—',
     dueDateColor: hasOverdue ? 'oklch(75% 0.13 25)' : 'oklch(85% 0.03 220)',
-    consumption: assocProfile.consumption,
+    consumption: assocProfile ? assocProfile.consumption : 0,
     statusLabel: hasOverdue ? 'Em atraso' : invoicesOpen.length ? 'Pendente' : 'Em dia',
     statusBg: hasOverdue ? 'oklch(55% 0.18 25)' : 'rgba(255,255,255,0.18)',
     statusColor: '#fff',
     cardBg: hasOverdue ? 'linear-gradient(160deg, oklch(48% 0.15 25), oklch(38% 0.14 20))' : 'linear-gradient(160deg, oklch(32% 0.08 220), oklch(24% 0.07 235))',
     count: invoicesOpen.length,
   };
-  const invoicesList = s.assocInvoices.map((inv) => {
+  const invoicesList = s.faturas.map((inv) => {
     const meta = STATUS_META[inv.status];
     const multaInv = multaFor(inv.value, inv.status);
     return {
@@ -401,10 +514,9 @@ export default function App() {
   const selectedTotal = selectedInvoices.filter((i) => i.checked).reduce((sum, i) => sum + i._total, 0);
   const selectedTotalFmt = brl(selectedTotal);
 
-  const paymentHistory = PAYMENT_HISTORY_DATA.map((p) => {
-    const meta = STATUS_META[p.status];
-    return { ...p, valueFmt: brl(p.value), statusLabel: meta.label, statusBg: meta.bg, statusColor: meta.color, canDownload: p.status === 'pago', onDownload: () => showToast('Baixando comprovante de ' + p.ref) };
-  });
+  const paymentHistory = s.faturas
+    .filter((f) => f.status === 'pago')
+    .map((f) => ({ ref: f.month, valueFmt: brl(f.value), method: 'Pix', statusLabel: 'Pago', statusBg: STATUS_META.pago.bg, statusColor: STATUS_META.pago.color, canDownload: false }));
 
   const qrCells = Array.from({ length: 100 }, (_, i) => {
     const row = Math.floor(i / 10);
@@ -428,26 +540,32 @@ export default function App() {
   const appShellStyle = { minHeight: '100vh', display: 'flex', flexDirection: isMobile ? 'column' : 'row', background: 'oklch(97.5% 0.006 230)' };
   const mainStyle = { flex: '1', minWidth: 0, padding: isMobile ? '20px 16px 40px' : '32px 40px 60px', maxWidth: isMobile ? '100%' : '1180px' };
 
-  const currentUserInitials = s.role === 'admin' ? 'RC' : initials(assocProfile.name);
-  const currentUserName = s.role === 'admin' ? 'Roberto Cardoso' : assocProfile.name;
-  const currentUserFirstName = assocProfile.name.split(' ')[0];
-  const currentUserRoleLabel = s.role === 'admin' ? 'Administrador' : 'Associado';
-  const sidebarProfileClick = s.role === 'associado' ? openEditProfile : () => {};
+  const currentUserInitials = initials(s.profile?.name || '?');
+  const currentUserName = s.profile?.name || '';
+  const currentUserFirstName = (assocProfile?.name || s.profile?.name || '').split(' ')[0];
+  const currentUserRoleLabel = s.profile?.role === 'admin' ? 'Administrador' : 'Associado';
+  const sidebarProfileClick = s.profile?.role === 'associado' ? openEditProfile : () => {};
 
   const expenseModalTitle = s.editingExpenseId ? 'Editar despesa' : 'Lançar despesa';
   const expenseConfirmLabel = s.editingExpenseId ? 'Salvar' : 'Lançar';
 
-  if (s.screen === 'login') {
+  // ============================================================
+  // renderização
+  // ============================================================
+
+  if (s.session === undefined) {
+    return <div style={{ minHeight: '100vh', background: 'oklch(97.5% 0.006 230)' }} />;
+  }
+
+  if (!s.session) {
+    return <Login isMobile={isMobile} doSignIn={doSignIn} doSignUp={doSignUp} />;
+  }
+
+  if (!s.profile) {
     return (
-      <Login
-        isMobile={isMobile}
-        loginRole={s.loginRole}
-        setLoginRoleAdmin={setLoginRoleAdmin}
-        setLoginRoleAssoc={setLoginRoleAssoc}
-        doLogin={doLogin}
-        associadosCount={associados.length}
-        inadimplenciaPct={stats.inadimplenciaPct}
-      />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'oklch(97.5% 0.006 230)', color: 'oklch(40% 0.02 230)', fontSize: 14 }}>
+        Carregando...
+      </div>
     );
   }
 
@@ -455,7 +573,7 @@ export default function App() {
     <div style={appShellStyle}>
       <Sidebar
         isMobile={isMobile}
-        role={s.role}
+        role={s.profile.role}
         adminPage={s.adminPage}
         assocPage={s.assocPage}
         goAdminDashboard={goAdminDashboard}
@@ -474,10 +592,12 @@ export default function App() {
       />
 
       <main style={mainStyle}>
-        {s.role === 'admin' && s.adminPage === 'dashboard' && (
+        {s.dataLoading && <p style={{ fontSize: 13, color: 'oklch(52% 0.01 230)' }}>Carregando dados...</p>}
+
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'dashboard' && (
           <Dashboard isMobile={isMobile} stats={stats} revenueBars={revenueBars} donutSegments={donutSegments} overdueList={overdueList} goAdminAssociados={goAdminAssociados} />
         )}
-        {s.role === 'admin' && s.adminPage === 'associados' && (
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'associados' && (
           <Associados
             isMobile={isMobile}
             associadosFull={associadosPage}
@@ -494,18 +614,23 @@ export default function App() {
             openAddAssociado={openAddAssociado}
           />
         )}
-        {s.role === 'admin' && s.adminPage === 'despesas' && <Despesas expenses={expenses} openAddExpense={openAddExpense} />}
-        {s.role === 'admin' && s.adminPage === 'administradores' && <Administradores isMobile={isMobile} admins={admins} openAddAdmin={openAddAdmin} />}
-        {s.role === 'admin' && s.adminPage === 'relatorios' && <Relatorios stats={stats} exportPdf={exportPdf} exportCsv={exportCsv} />}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && <Despesas expenses={expenses} openAddExpense={openAddExpense} />}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'administradores' && <Administradores isMobile={isMobile} admins={admins} openAddAdmin={openAddAdmin} />}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'relatorios' && <Relatorios stats={stats} exportPdf={exportPdf} exportCsv={exportCsv} />}
 
-        {s.role === 'associado' && s.assocPage === 'inicio' && (
+        {!s.dataLoading && s.profile.role === 'associado' && !assocProfile && (
+          <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)' }}>
+            Sua conta ainda não está vinculada a nenhuma unidade. Peça para um administrador te cadastrar como associado com este mesmo e-mail.
+          </p>
+        )}
+        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'inicio' && (
           <Inicio isMobile={isMobile} currentUserFirstName={currentUserFirstName} currentInvoice={currentInvoice} assocProfile={assocProfile} invoicesList={invoicesList} goPagarTodas={goPagarTodas} />
         )}
-        {s.role === 'associado' && s.assocPage === 'pagar' && (
+        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'pagar' && (
           <Pagar
             selectedInvoices={selectedInvoices}
             selectedTotalFmt={selectedTotalFmt}
-            hasSelectedInvoices={selectedInvoices.length > 0}
+            hasSelectedInvoices={selectedInvoices.some((i) => i.checked)}
             payMethod={s.payMethod}
             setPayPix={setPayPix}
             setPayBoleto={setPayBoleto}
@@ -519,7 +644,7 @@ export default function App() {
             confirmPayment={confirmPayment}
           />
         )}
-        {s.role === 'associado' && s.assocPage === 'historico' && <Historico paymentHistory={paymentHistory} />}
+        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'historico' && <Historico paymentHistory={paymentHistory} />}
       </main>
 
       <Toast message={s.toast} />

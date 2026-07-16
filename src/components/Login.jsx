@@ -1,14 +1,25 @@
+import { useState } from 'react';
 import { DropletIcon } from './icons';
 
-export default function Login({
-  isMobile,
-  loginRole,
-  setLoginRoleAdmin,
-  setLoginRoleAssoc,
-  doLogin,
-  associadosCount,
-  inadimplenciaPct,
-}) {
+const ERROR_MESSAGES = {
+  'Invalid login credentials': 'E-mail ou senha incorretos.',
+  'User already registered': 'Já existe uma conta com este e-mail.',
+};
+
+function translateError(message) {
+  return ERROR_MESSAGES[message] || message;
+}
+
+export default function Login({ isMobile, doSignIn, doSignUp }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const [role, setRole] = useState('admin'); // 'admin' | 'associado'
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+
   const tabBtn = (active) => ({
     flex: 1,
     padding: '9px',
@@ -33,9 +44,36 @@ export default function Login({
     background: '#fff',
   };
 
-  const handleSubmit = (e) => {
+  const inputStyle = {
+    border: '1.5px solid oklch(89% 0.01 230)',
+    borderRadius: 9,
+    padding: '11px 13px',
+    fontSize: 14,
+    marginBottom: 16,
+    outline: 'none',
+    color: 'oklch(20% 0.02 230)',
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    doLogin();
+    setError(null);
+    setNotice(null);
+    setSubmitting(true);
+    try {
+      if (mode === 'login') {
+        await doSignIn({ email, password });
+      } else {
+        const result = await doSignUp({ email, password, name, role });
+        if (!result?.session) {
+          setNotice('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
+          setMode('login');
+        }
+      }
+    } catch (err) {
+      setError(translateError(err.message));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -73,61 +111,61 @@ export default function Login({
                 Acompanhe cobranças, pagamentos e despesas em um só lugar — para administradores e associados.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 28, paddingTop: 32, borderTop: '1px solid oklch(100% 0 0 / 0.15)' }}>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{associadosCount}</div>
-                <div style={{ fontSize: 11.5, color: 'oklch(85% 0.03 220)' }}>associados ativos</div>
-              </div>
-              <div>
-                <div style={{ fontSize: 22, fontWeight: 800 }}>{inadimplenciaPct}%</div>
-                <div style={{ fontSize: 11.5, color: 'oklch(85% 0.03 220)' }}>inadimplência</div>
-              </div>
-            </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ padding: '48px 40px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', background: 'oklch(95% 0.01 230)', borderRadius: 10, padding: 4, marginBottom: 28 }}>
-            <button type="button" onClick={setLoginRoleAdmin} style={tabBtn(loginRole === 'admin')}>
+          <div style={{ display: 'flex', background: 'oklch(95% 0.01 230)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
+            <button type="button" onClick={() => setRole('admin')} style={tabBtn(role === 'admin')}>
               Administrador
             </button>
-            <button type="button" onClick={setLoginRoleAssoc} style={tabBtn(loginRole === 'associado')}>
+            <button type="button" onClick={() => setRole('associado')} style={tabBtn(role === 'associado')}>
               Associado
             </button>
           </div>
 
+          {mode === 'signup' && (
+            <>
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>Nome completo</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+            </>
+          )}
+
           <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>E-mail</label>
           <input
             type="email"
-            placeholder={loginRole === 'admin' ? 'admin@associacao.org' : 'associado@email.com'}
-            style={{
-              border: '1.5px solid oklch(89% 0.01 230)',
-              borderRadius: 9,
-              padding: '11px 13px',
-              fontSize: 14,
-              marginBottom: 16,
-              outline: 'none',
-              color: 'oklch(20% 0.02 230)',
-            }}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={role === 'admin' ? 'admin@associacao.org' : 'associado@email.com'}
+            required
+            style={inputStyle}
           />
 
           <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>Senha</label>
           <input
             type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
-            style={{
-              border: '1.5px solid oklch(89% 0.01 230)',
-              borderRadius: 9,
-              padding: '11px 13px',
-              fontSize: 14,
-              marginBottom: 24,
-              outline: 'none',
-              color: 'oklch(20% 0.02 230)',
-            }}
+            minLength={6}
+            required
+            style={{ ...inputStyle, marginBottom: 20 }}
           />
+
+          {error && (
+            <p style={{ fontSize: 12.5, color: 'oklch(45% 0.15 25)', background: 'oklch(95% 0.04 25)', borderRadius: 8, padding: '8px 11px', margin: '0 0 14px' }}>
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p style={{ fontSize: 12.5, color: 'oklch(38% 0.13 150)', background: 'oklch(94% 0.04 150)', borderRadius: 8, padding: '8px 11px', margin: '0 0 14px' }}>
+              {notice}
+            </p>
+          )}
 
           <button
             type="submit"
+            disabled={submitting}
             style={{
               background: 'oklch(32% 0.08 220)',
               color: '#fff',
@@ -136,22 +174,25 @@ export default function Login({
               padding: 13,
               fontSize: 14.5,
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: submitting ? 'default' : 'pointer',
+              opacity: submitting ? 0.7 : 1,
               marginBottom: 14,
             }}
           >
-            Entrar
+            {submitting ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta'}
           </button>
-          <p style={{ fontSize: 12, color: 'oklch(55% 0.01 230)', textAlign: 'center', margin: '0 0 4px' }}>
-            Protótipo — qualquer e-mail e senha funcionam
-          </p>
-          <a
-            href="#"
-            onClick={(e) => e.preventDefault()}
-            style={{ fontSize: 12.5, textAlign: 'center', textDecoration: 'none' }}
+
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === 'login' ? 'signup' : 'login');
+              setError(null);
+              setNotice(null);
+            }}
+            style={{ background: 'none', border: 'none', color: 'oklch(45% 0.13 230)', fontSize: 12.5, textAlign: 'center', cursor: 'pointer' }}
           >
-            Esqueci minha senha
-          </a>
+            {mode === 'login' ? 'Ainda não tem conta? Criar conta' : 'Já tem conta? Entrar'}
+          </button>
         </form>
       </div>
     </div>
