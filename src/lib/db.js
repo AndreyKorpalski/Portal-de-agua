@@ -175,3 +175,12 @@ export async function markFaturasPaid(ids, paymentMethod) {
   if (error) throw error;
   return data.map(mapFatura);
 }
+
+// ---- cobrança por e-mail (Edge Function + Resend) ----
+
+export async function sendCobrancaEmail(associadoId) {
+  const { data, error } = await supabase.functions.invoke('send-cobranca', { body: { associadoId } });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}

@@ -18,6 +18,7 @@ import AddExpenseModal from './components/modals/AddExpenseModal';
 import AddAdminModal from './components/modals/AddAdminModal';
 import { brl, initials, seeded, multaFor, STATUS_META } from './utils/format';
 import { sameMonth, MONTH_NAMES_PT } from './utils/date';
+import { mapWithConcurrency } from './utils/concurrency';
 import { supabase } from './lib/supabaseClient';
 import { signIn, signUp, signOut, fetchProfile } from './lib/auth';
 import {
@@ -25,6 +26,7 @@ import {
   fetchDespesas, insertDespesa, updateDespesa, deleteDespesa,
   fetchAdmins, insertAdmin, deleteAdmin,
   fetchOwnAssociado, fetchFaturasByAssociado, fetchFaturas, insertFatura, markFaturasPaid,
+  sendCobrancaEmail,
 } from './lib/db';
 import { exportReportPdf, exportReportCsv } from './lib/reports';
 
@@ -199,22 +201,37 @@ export default function App() {
   const openViewProfile = (id) => setState({ showViewProfile: true, viewProfileId: id });
   const closeViewProfile = () => setState({ showViewProfile: false });
 
-  const enviarCobranca = (id, name) => {
+  const enviarCobranca = async (id, name) => {
     const a = s.associados.find((x) => x.id === id);
     if (a && sameMonth(a.lastChargeSentAt)) return;
-    const now = new Date().toISOString();
-    setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, lastChargeSentAt: now } : x)) }));
-    updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + err.message));
-    showToast(`Cobrança enviada para ${name} — só é possível cobrar 1x por mês`);
+    try {
+      showToast(`Enviando cobrança para ${name}...`);
+      await sendCobrancaEmail(id);
+      const now = new Date().toISOString();
+      setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, lastChargeSentAt: now } : x)) }));
+      updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + err.message));
+      showToast(`Cobrança enviada para ${name} por e-mail`);
+    } catch (err) {
+      showToast(`Erro ao enviar cobrança para ${name}: ` + err.message);
+    }
   };
-  const cobrarTodos = () => {
+  const cobrarTodos = async () => {
     const pendentes = s.associados.filter((a) => a.status !== 'pago' && !sameMonth(a.lastChargeSentAt));
     if (pendentes.length === 0) { showToast('Todas as cobranças do mês já foram enviadas'); return; }
+    showToast(`Enviando cobrança para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'}...`);
+    // envia no máximo 5 e-mails em paralelo — evita esmagar o limite de
+    // taxa do provedor de e-mail quando há milhares de associados
+    const results = await mapWithConcurrency(pendentes, 5, (a) => sendCobrancaEmail(a.id));
     const now = new Date().toISOString();
-    const ids = new Set(pendentes.map((a) => a.id));
-    setState((p) => ({ associados: p.associados.map((a) => (ids.has(a.id) ? { ...a, lastChargeSentAt: now } : a)) }));
-    Promise.all(pendentes.map((a) => updateAssociado(a.id, { lastChargeSentAt: now }))).catch((err) => showToast('Erro: ' + err.message));
-    showToast(`Cobrança enviada para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'}`);
+    const succeeded = pendentes.filter((_, i) => results[i].status === 'fulfilled');
+    const succeededIds = new Set(succeeded.map((a) => a.id));
+    setState((p) => ({ associados: p.associados.map((a) => (succeededIds.has(a.id) ? { ...a, lastChargeSentAt: now } : a)) }));
+    await Promise.all(succeeded.map((a) => updateAssociado(a.id, { lastChargeSentAt: now }).catch(() => {})));
+    const failed = pendentes.length - succeeded.length;
+    showToast(
+      `Cobrança enviada para ${succeeded.length} associado${succeeded.length === 1 ? '' : 's'}` +
+        (failed ? ` — ${failed} falharam` : ''),
+    );
   };
 
   const openBulkDueDate = () => setState({ showBulkDueDate: true });
