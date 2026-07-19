@@ -31,6 +31,7 @@ export default function Sidebar({
 }) {
   const sidebarStyle = {
     width: isMobile ? '100%' : '236px',
+    minWidth: 0, // sem isso, o conteúdo interno força a página a alargar em vez de rolar
     flex: 'none',
     background: '#fff',
     borderRight: isMobile ? 'none' : '1px solid oklch(91% 0.008 230)',
@@ -163,21 +164,23 @@ export default function Sidebar({
           >
             {currentUserInitials}
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <div
-              style={{
-                fontSize: 12.5,
-                fontWeight: 700,
-                color: 'oklch(20% 0.02 230)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {currentUserName}
+          {!isMobile && (
+            <div style={{ overflow: 'hidden' }}>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: 'oklch(20% 0.02 230)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {currentUserName}
+              </div>
+              <div style={{ fontSize: 11, color: 'oklch(55% 0.01 230)' }}>{currentUserRoleLabel}</div>
             </div>
-            <div style={{ fontSize: 11, color: 'oklch(55% 0.01 230)' }}>{currentUserRoleLabel}</div>
-          </div>
+          )}
         </button>
         <button
           onClick={doLogout}

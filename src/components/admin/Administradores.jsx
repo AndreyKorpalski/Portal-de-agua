@@ -3,7 +3,16 @@ export default function Administradores({ isMobile, admins, openAddAdmin }) {
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          marginBottom: 4,
+        }}
+      >
         <h1 style={{ fontSize: 23, fontWeight: 800, color: 'oklch(18% 0.02 230)', margin: 0 }}>Administradores</h1>
         <button
           onClick={openAddAdmin}

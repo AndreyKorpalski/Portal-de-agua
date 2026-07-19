@@ -11,7 +11,10 @@ export default function Dashboard({ isMobile, stats, revenueBars, donutSegments,
     gap: '16px',
     marginBottom: '22px',
   };
-  const cardStyle = { background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, padding: '18px 20px' };
+  // minWidth: 0 é necessário pro grid poder encolher a coluna no mobile —
+  // sem isso, um valor grande sem espaços (ex: "R$ 1.555,00") força a
+  // página inteira a alargar em vez de só quebrar/encolher no card
+  const cardStyle = { background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, padding: '18px 20px', minWidth: 0 };
 
   return (
     <>
