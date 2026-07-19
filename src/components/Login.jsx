@@ -4,6 +4,7 @@ import { DropletIcon } from './icons';
 const ERROR_MESSAGES = {
   'Invalid login credentials': 'E-mail ou senha incorretos.',
   'User already registered': 'Já existe uma conta com este e-mail.',
+  'Database error saving new user': 'Não foi possível criar a conta de administrador — seu e-mail precisa ser cadastrado antes por um administrador existente (tela Administradores).',
 };
 
 function translateError(message) {

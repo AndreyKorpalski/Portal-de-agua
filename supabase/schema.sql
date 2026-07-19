@@ -156,6 +156,14 @@ create policy "faturas_delete_admin" on faturas
 -- confirmação de e-mail (não depende de RLS).
 -- O papel ('admin' ou 'associado') e o nome vêm de
 -- options.data passado no supabase.auth.signUp() do app.
+--
+-- Cadastro de administrador é restrito: o primeiro admin do sistema
+-- pode se cadastrar livremente (bootstrap); depois disso, só entra
+-- quem já foi pré-cadastrado por um admin existente (tela
+-- Administradores → "+ Adicionar administrador", que cria uma linha
+-- em public.admins com profile_id nulo — igual já funciona pra
+-- associados). Sem isso, qualquer pessoa poderia se autopromover a
+-- administrador só escolhendo a aba certa no cadastro.
 -- ============================================================
 create or replace function handle_new_user()
 returns trigger
@@ -166,13 +174,26 @@ as $$
 declare
   chosen_role text := coalesce(new.raw_user_meta_data->>'role', 'associado');
   chosen_name text := coalesce(new.raw_user_meta_data->>'name', '');
+  invited_admin_id bigint;
+  any_admin_exists boolean;
 begin
-  insert into public.profiles (id, role, name, email)
-  values (new.id, chosen_role, chosen_name, new.email);
-
   if chosen_role = 'admin' then
-    insert into public.admins (profile_id, name, email)
-    values (new.id, chosen_name, new.email);
+    select id into invited_admin_id
+      from public.admins where email = new.email and profile_id is null
+      order by id limit 1;
+    select exists(select 1 from public.admins where profile_id is not null) into any_admin_exists;
+
+    if invited_admin_id is not null then
+      update public.admins
+        set profile_id = new.id, name = coalesce(nullif(chosen_name, ''), name)
+        where id = invited_admin_id;
+    elsif not any_admin_exists then
+      insert into public.admins (profile_id, name, email) values (new.id, chosen_name, new.email);
+    else
+      raise exception 'Cadastro de administrador requer convite prévio de um administrador existente.';
+    end if;
+
+    insert into public.profiles (id, role, name, email) values (new.id, 'admin', chosen_name, new.email);
   else
     -- usa subquery com limit 1: mesmo que existam associados duplicados
     -- com o mesmo e-mail (cadastro errado do admin), só um é vinculado
@@ -189,6 +210,8 @@ begin
       insert into public.associados (profile_id, name, email)
       values (new.id, chosen_name, new.email);
     end if;
+
+    insert into public.profiles (id, role, name, email) values (new.id, 'associado', chosen_name, new.email);
   end if;
 
   return new;
