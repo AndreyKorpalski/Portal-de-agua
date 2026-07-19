@@ -44,6 +44,8 @@ function mapFatura(row) {
     value: Number(row.value),
     dueDate: isoToLong(row.due_date),
     status: row.status,
+    paymentMethod: row.payment_method,
+    paidAt: row.paid_at,
   };
 }
 
@@ -56,9 +58,11 @@ export async function fetchAssociados() {
 }
 
 export async function fetchOwnAssociado(profileId) {
-  const { data, error } = await supabase.from('associados').select('*').eq('profile_id', profileId).maybeSingle();
+  // .limit(1) em vez de .maybeSingle(): tolera dados legados com mais de
+  // um associado vinculado ao mesmo perfil, em vez de estourar erro
+  const { data, error } = await supabase.from('associados').select('*').eq('profile_id', profileId).order('id').limit(1);
   if (error) throw error;
-  return data ? mapAssociado(data) : null;
+  return data && data.length ? mapAssociado(data[0]) : null;
 }
 
 export async function insertAssociado({ name, unit, email, value }) {
@@ -161,22 +165,6 @@ export async function fetchFaturasByAssociado(associadoId) {
   const { data, error } = await supabase.from('faturas').select('*').eq('associado_id', associadoId).order('due_date');
   if (error) throw error;
   return data.map(mapFatura);
-}
-
-export async function fetchPaymentHistory(associadoId) {
-  const { data, error } = await supabase
-    .from('faturas')
-    .select('*')
-    .eq('associado_id', associadoId)
-    .eq('status', 'pago')
-    .order('paid_at', { ascending: false });
-  if (error) throw error;
-  return data.map((row) => ({
-    ref: row.month,
-    value: Number(row.value),
-    method: row.payment_method === 'boleto' ? 'Boleto' : 'Pix',
-    status: 'pago',
-  }));
 }
 
 export async function insertFatura({ associadoId, month, value, dueDateIso, status }) {

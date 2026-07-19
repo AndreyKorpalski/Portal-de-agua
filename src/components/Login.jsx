@@ -7,7 +7,23 @@ const ERROR_MESSAGES = {
 };
 
 function translateError(message) {
-  return ERROR_MESSAGES[message] || message;
+  if (ERROR_MESSAGES[message]) return ERROR_MESSAGES[message];
+  if (/fetch|network|connection/i.test(message)) {
+    return 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+  }
+  return message;
+}
+
+function handleInvalid(e) {
+  const el = e.target;
+  if (el.validity.valueMissing) el.setCustomValidity('Preencha este campo.');
+  else if (el.validity.typeMismatch) el.setCustomValidity('Digite um e-mail válido.');
+  else if (el.validity.tooShort) el.setCustomValidity('A senha precisa ter pelo menos 6 caracteres.');
+  else el.setCustomValidity('');
+}
+
+function clearValidity(e) {
+  e.target.setCustomValidity('');
 }
 
 export default function Login({ isMobile, doSignIn, doSignUp }) {
@@ -127,7 +143,13 @@ export default function Login({ isMobile, doSignIn, doSignUp }) {
           {mode === 'signup' && (
             <>
               <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>Nome completo</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
+              <input
+                value={name}
+                onChange={(e) => { clearValidity(e); setName(e.target.value); }}
+                onInvalid={handleInvalid}
+                required
+                style={inputStyle}
+              />
             </>
           )}
 
@@ -135,7 +157,8 @@ export default function Login({ isMobile, doSignIn, doSignUp }) {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => { clearValidity(e); setEmail(e.target.value); }}
+            onInvalid={handleInvalid}
             placeholder={role === 'admin' ? 'admin@associacao.org' : 'associado@email.com'}
             required
             style={inputStyle}
@@ -145,7 +168,8 @@ export default function Login({ isMobile, doSignIn, doSignUp }) {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => { clearValidity(e); setPassword(e.target.value); }}
+            onInvalid={handleInvalid}
             placeholder="••••••••"
             minLength={6}
             required

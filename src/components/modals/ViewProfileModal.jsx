@@ -1,6 +1,6 @@
 import ModalShell from './ModalShell';
 
-export default function ViewProfileModal({ width, data, close }) {
+export default function ViewProfileModal({ width, data, close, edit }) {
   if (!data) return null;
   return (
     <ModalShell width={width}>
@@ -41,22 +41,42 @@ export default function ViewProfileModal({ width, data, close }) {
           <div style={{ fontSize: 13.5, color: 'oklch(20% 0.02 230)' }}>{data.address}</div>
         </div>
       </div>
-      <button
-        onClick={close}
-        style={{
-          width: '100%',
-          background: 'oklch(32% 0.08 220)',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 9,
-          padding: 11,
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: 'pointer',
-        }}
-      >
-        Fechar
-      </button>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={close}
+          style={{
+            flex: 1,
+            background: '#fff',
+            border: '1.5px solid oklch(89% 0.01 230)',
+            borderRadius: 9,
+            padding: 11,
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'oklch(35% 0.02 230)',
+            cursor: 'pointer',
+          }}
+        >
+          Fechar
+        </button>
+        {edit && (
+          <button
+            onClick={edit}
+            style={{
+              flex: 1,
+              background: 'oklch(32% 0.08 220)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 9,
+              padding: 11,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Editar
+          </button>
+        )}
+      </div>
     </ModalShell>
   );
 }

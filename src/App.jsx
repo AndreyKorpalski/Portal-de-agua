@@ -24,8 +24,10 @@ import {
   fetchAssociados, insertAssociado, updateAssociado, deleteAssociado,
   fetchDespesas, insertDespesa, updateDespesa, deleteDespesa, uploadReceipt,
   fetchAdmins, insertAdmin, deleteAdmin,
-  fetchOwnAssociado, fetchFaturasByAssociado, insertFatura, markFaturasPaid,
+  fetchOwnAssociado, fetchFaturasByAssociado, fetchFaturas, insertFatura, markFaturasPaid,
 } from './lib/db';
+
+const MONTH_ABBR_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 const INITIAL_STATE = {
   // autenticação
@@ -35,7 +37,7 @@ const INITIAL_STATE = {
 
   // dados carregados do banco
   dataLoading: false,
-  associados: [], despesas: [], admins: [], // papel admin
+  associados: [], despesas: [], admins: [], allFaturas: [], // papel admin
   ownAssociado: null, faturas: [], // papel associado
 
   // navegação / UI
@@ -50,7 +52,22 @@ const INITIAL_STATE = {
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
   showBulkDueDate: false, bulkDueDate: '10/08',
   showViewProfile: false, viewProfileId: null,
-  showEditProfile: false, editProfileDraft: { name: '', email: '', phone: '', address: '' },
+  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '' },
+  selectedInvoiceIds: {},
+};
+
+const BLANK_UI_STATE = {
+  adminPage: 'dashboard', assocPage: 'inicio', payMethod: 'pix',
+  toast: null,
+  showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
+  newAssociado: { name: '', unit: '', email: '', value: 80 },
+  newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null },
+  editingExpenseId: null,
+  associadoSearch: '', associadoPage: 0,
+  newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
+  showBulkDueDate: false, bulkDueDate: '10/08',
+  showViewProfile: false, viewProfileId: null,
+  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '' },
   selectedInvoiceIds: {},
 };
 
@@ -115,9 +132,9 @@ export default function App() {
     (async () => {
       try {
         if (s.profile.role === 'admin') {
-          const [associados, despesas, admins] = await Promise.all([fetchAssociados(), fetchDespesas(), fetchAdmins()]);
+          const [associados, despesas, admins, allFaturas] = await Promise.all([fetchAssociados(), fetchDespesas(), fetchAdmins(), fetchFaturas()]);
           if (!active) return;
-          setState({ associados, despesas, admins, dataLoading: false });
+          setState({ associados, despesas, admins, allFaturas, dataLoading: false });
         } else {
           const own = await fetchOwnAssociado(s.profile.id);
           if (!active) return;
@@ -140,7 +157,7 @@ export default function App() {
   const doSignUp = async ({ email, password, name, role }) => signUp({ email, password, name, role });
   const doLogout = async () => {
     await signOut();
-    setState({ associados: [], despesas: [], admins: [], ownAssociado: null, faturas: [], adminPage: 'dashboard', assocPage: 'inicio' });
+    setState({ associados: [], despesas: [], admins: [], allFaturas: [], ownAssociado: null, faturas: [], ...BLANK_UI_STATE });
   };
 
   // --- navegação ---
@@ -217,15 +234,34 @@ export default function App() {
 
   const generateMonthlyCharges = async () => {
     const now = new Date();
-    const monthLabel = `${MONTH_NAMES_PT[now.getMonth()]}/${now.getFullYear()}`;
-    const dueDateIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-10`;
-    const dueDateShort = `10/${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const list = s.associados;
+    const year = now.getFullYear();
+    const monthNum = now.getMonth() + 1;
+    const monthLabel = `${MONTH_NAMES_PT[now.getMonth()]}/${year}`;
+
+    // já cobrado esse mês? não gera de novo (evita fatura duplicada em clique repetido)
+    const alreadyBilled = new Set(s.allFaturas.filter((f) => f.month === monthLabel).map((f) => f.associadoId));
+    const list = s.associados.filter((a) => !alreadyBilled.has(a.id));
+    if (list.length === 0) {
+      showToast(`Cobranças de ${monthLabel} já foram geradas para todos os associados`);
+      return;
+    }
+
     try {
-      await Promise.all(list.map((a) => insertFatura({ associadoId: a.id, month: monthLabel, value: a.value, dueDateIso, status: 'pendente' })));
-      await Promise.all(list.map((a) => updateAssociado(a.id, { dueDate: dueDateShort })));
-      setState((p) => ({ associados: p.associados.map((a) => ({ ...a, status: 'pendente', dueDate: dueDateShort })) }));
-      showToast(`Cobranças de ${monthLabel} geradas para ${list.length} associados`);
+      const created = await Promise.all(
+        list.map((a) => {
+          // respeita o vencimento já configurado de cada associado (ex: "15/07" -> dia 15)
+          const day = parseInt(String(a.dueDate).split('/')[0], 10) || 10;
+          const dueDateIso = `${year}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          return insertFatura({ associadoId: a.id, month: monthLabel, value: a.value, dueDateIso, status: 'pendente' });
+        }),
+      );
+      // o status de cada associado é recalculado no banco pelo trigger
+      // sync_associado_status a partir das novas faturas — refaz a busca
+      // em vez de tentar replicar essa lógica no cliente
+      const refreshedAssociados = await fetchAssociados();
+      setState((p) => ({ allFaturas: [...p.allFaturas, ...created], associados: refreshedAssociados }));
+      const skipped = s.associados.length - list.length;
+      showToast(`Cobranças de ${monthLabel} geradas para ${list.length} associados${skipped ? ` (${skipped} já tinham sido cobrados)` : ''}`);
     } catch (err) {
       showToast('Erro: ' + err.message);
     }
@@ -333,22 +369,32 @@ export default function App() {
   const exportPdf = () => showToast('Exportando relatório em PDF...');
   const exportCsv = () => showToast('Exportando relatório em CSV...');
 
-  // --- perfil (associado edita o próprio) ---
+  // --- perfil (associado edita o próprio; admin edita o de qualquer associado) ---
   const openEditProfile = () => {
     const p = s.ownAssociado;
     if (!p) return;
-    setState({ showEditProfile: true, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
+    setState({ showEditProfile: true, editingAssociadoId: p.id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
   };
-  const closeEditProfile = () => setState({ showEditProfile: false });
+  const openAdminEditAssociado = (id) => {
+    const p = s.associados.find((x) => x.id === id);
+    if (!p) return;
+    setState({ showViewProfile: false, showEditProfile: true, editingAssociadoId: id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
+  };
+  const closeEditProfile = () => setState({ showEditProfile: false, editingAssociadoId: null });
   const setEditProfileName = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, name: e.target.value } }));
   const setEditProfileEmail = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, email: e.target.value } }));
   const setEditProfilePhone = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, phone: e.target.value } }));
   const setEditProfileAddress = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, address: e.target.value } }));
   const saveEditProfile = async () => {
-    if (!s.ownAssociado) return;
+    if (!s.editingAssociadoId) return;
     try {
-      const updated = await updateAssociado(s.ownAssociado.id, s.editProfileDraft);
-      setState({ ownAssociado: updated, showEditProfile: false });
+      const updated = await updateAssociado(s.editingAssociadoId, s.editProfileDraft);
+      setState((p) => ({
+        showEditProfile: false,
+        editingAssociadoId: null,
+        ownAssociado: p.ownAssociado && p.ownAssociado.id === updated.id ? updated : p.ownAssociado,
+        associados: p.associados.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)),
+      }));
       showToast('Perfil atualizado');
     } catch (err) {
       showToast('Erro: ' + err.message);
@@ -384,6 +430,7 @@ export default function App() {
         updateAssociado(a.id, { consumption: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
       },
       onDelete: () => {
+        if (!window.confirm(`Remover ${a.name}? Isso apaga também o histórico de faturas dele(a). Essa ação não pode ser desfeita.`)) return;
         setState((p) => ({ associados: p.associados.filter((x) => x.id !== a.id) }));
         deleteAssociado(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
       },
@@ -407,6 +454,7 @@ export default function App() {
     ...e,
     valueFmt: brl(e.value),
     onDelete: () => {
+      if (!window.confirm(`Remover a despesa "${e.description}"? Essa ação não pode ser desfeita.`)) return;
       setState((p) => ({ despesas: p.despesas.filter((x) => x.id !== e.id) }));
       deleteDespesa(e.id).catch((err) => showToast('Erro ao remover: ' + err.message));
     },
@@ -416,6 +464,7 @@ export default function App() {
     ...a,
     initials: initials(a.name),
     onDelete: () => {
+      if (!window.confirm(`Remover ${a.name} da lista de administradores?`)) return;
       setState((p) => ({ admins: p.admins.filter((x) => x.id !== a.id) }));
       deleteAdmin(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
     },
@@ -438,12 +487,24 @@ export default function App() {
     pagoPct,
   };
 
-  // histórico de arrecadação real ainda não é rastreado mês a mês — mostramos
-  // o mês atual real e uma referência aproximada para os anteriores.
-  const revHist = [6600, 7100, 6900, 7600, 7300, arrecadado];
-  const maxRev = Math.max(...revHist, 1);
-  const months = ['Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul'];
-  const revenueBars = revHist.map((v, i) => ({ month: months[i], valueFmt: brl(v).replace('R$', '').trim(), heightPct: Math.round((v / maxRev) * 100), color: i === 5 ? 'oklch(45% 0.13 210)' : 'oklch(85% 0.03 220)' }));
+  // arrecadação por mês a partir das faturas pagas de verdade (agrupadas
+  // pelo mês de vencimento), em vez de números fixos de exemplo
+  const revenueByMonth = new Map();
+  s.allFaturas.filter((f) => f.status === 'pago').forEach((f) => {
+    const [, mm, yyyy] = f.dueDate.split('/');
+    const key = `${yyyy}-${mm}`;
+    const entry = revenueByMonth.get(key) || { key, label: MONTH_ABBR_PT[parseInt(mm, 10) - 1], sum: 0 };
+    entry.sum += f.value;
+    revenueByMonth.set(key, entry);
+  });
+  const revenueMonths = Array.from(revenueByMonth.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(-6);
+  const maxRev = Math.max(...revenueMonths.map((m) => m.sum), 1);
+  const revenueBars = revenueMonths.map((m, i) => ({
+    month: m.label,
+    valueFmt: brl(m.sum).replace('R$', '').trim(),
+    heightPct: Math.round((m.sum / maxRev) * 100),
+    color: i === revenueMonths.length - 1 ? 'oklch(45% 0.13 210)' : 'oklch(85% 0.03 220)',
+  }));
 
   const pendenteCount = associados.filter((a) => a.status === 'pendente').length;
   const atrasadoCount = associados.filter((a) => a.status === 'atrasado').length;
@@ -516,7 +577,15 @@ export default function App() {
 
   const paymentHistory = s.faturas
     .filter((f) => f.status === 'pago')
-    .map((f) => ({ ref: f.month, valueFmt: brl(f.value), method: 'Pix', statusLabel: 'Pago', statusBg: STATUS_META.pago.bg, statusColor: STATUS_META.pago.color, canDownload: false }));
+    .map((f) => ({
+      ref: f.month,
+      valueFmt: brl(f.value),
+      method: f.paymentMethod === 'boleto' ? 'Boleto' : f.paymentMethod === 'pix' ? 'Pix' : '—',
+      statusLabel: 'Pago',
+      statusBg: STATUS_META.pago.bg,
+      statusColor: STATUS_META.pago.color,
+      canDownload: false,
+    }));
 
   const qrCells = Array.from({ length: 100 }, (_, i) => {
     const row = Math.floor(i / 10);
@@ -649,7 +718,14 @@ export default function App() {
 
       <Toast message={s.toast} />
 
-      {s.showViewProfile && <ViewProfileModal width={modalWidth} data={viewProfileData} close={closeViewProfile} />}
+      {s.showViewProfile && (
+        <ViewProfileModal
+          width={modalWidth}
+          data={viewProfileData}
+          close={closeViewProfile}
+          edit={viewProfileData ? () => openAdminEditAssociado(viewProfileData.id) : null}
+        />
+      )}
 
       {s.showEditProfile && (
         <EditProfileModal

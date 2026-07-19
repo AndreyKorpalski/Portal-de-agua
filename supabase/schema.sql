@@ -78,6 +78,13 @@ create table if not exists faturas (
 
 create index if not exists faturas_associado_id_idx on faturas (associado_id);
 
+-- impede gerar a mesma cobrança do mês duas vezes para o mesmo associado
+create unique index if not exists faturas_associado_month_unique on faturas (associado_id, month);
+
+-- impede cadastrar dois associados com o mesmo e-mail (permite múltiplos
+-- registros sem e-mail definido, representado pelo placeholder '—')
+create unique index if not exists associados_email_unique on associados (email) where email <> '—' and email <> '';
+
 -- ============================================================
 -- Função auxiliar: o usuário logado é admin?
 -- (security definer evita recursão de RLS ao consultar profiles)
@@ -168,9 +175,16 @@ begin
     insert into public.admins (profile_id, name, email)
     values (new.id, chosen_name, new.email);
   else
+    -- usa subquery com limit 1: mesmo que existam associados duplicados
+    -- com o mesmo e-mail (cadastro errado do admin), só um é vinculado
     update public.associados
       set profile_id = new.id
-      where email = new.email and profile_id is null;
+      where id = (
+        select id from public.associados
+        where email = new.email and profile_id is null
+        order by id
+        limit 1
+      );
 
     if not found then
       insert into public.associados (profile_id, name, email)
