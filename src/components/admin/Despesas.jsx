@@ -1,6 +1,4 @@
-import { FileIcon } from '../icons';
-
-const GRID_COLS = '0.9fr 2fr 1fr 0.9fr 1.1fr 0.8fr';
+const GRID_COLS = '0.9fr 2fr 1fr 0.9fr 0.8fr';
 
 export default function Despesas({ expenses, openAddExpense }) {
   return (
@@ -23,7 +21,7 @@ export default function Despesas({ expenses, openAddExpense }) {
           + Lançar despesa
         </button>
       </div>
-      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 20px' }}>Registre gastos da associação com comprovante</p>
+      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 20px' }}>Registre os gastos da associação</p>
 
       <div style={{ background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, overflowX: 'auto' }}>
         <div style={{ minWidth: 760 }}>
@@ -45,7 +43,6 @@ export default function Despesas({ expenses, openAddExpense }) {
             <div>Descrição</div>
             <div>Categoria</div>
             <div>Valor</div>
-            <div>Comprovante</div>
             <div></div>
           </div>
           {expenses.map((exp) => (
@@ -77,10 +74,6 @@ export default function Despesas({ expenses, openAddExpense }) {
                 </span>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(20% 0.02 230)' }}>{exp.valueFmt}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'oklch(45% 0.13 210)' }}>
-                <FileIcon />
-                {exp.receipt}
-              </div>
               <div style={{ display: 'flex', gap: 10, justifySelf: 'end' }}>
                 <button onClick={exp.onEdit} style={{ background: 'none', border: 'none', color: 'oklch(32% 0.08 220)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                   Editar

@@ -27,8 +27,6 @@ function mapDespesa(row) {
     description: row.description,
     category: row.category,
     value: Number(row.value),
-    receipt: row.receipt_path || 'sem-comprovante',
-    receiptPath: row.receipt_path,
   };
 }
 
@@ -104,20 +102,18 @@ export async function fetchDespesas() {
   return data.map(mapDespesa);
 }
 
-export async function insertDespesa({ description, category, value, receiptPath }) {
+export async function insertDespesa({ description, category, value }) {
   const { data, error } = await supabase
     .from('despesas')
-    .insert({ date: todayIso(), description, category, value, receipt_path: receiptPath || null })
+    .insert({ date: todayIso(), description, category, value })
     .select()
     .single();
   if (error) throw error;
   return mapDespesa(data);
 }
 
-export async function updateDespesa(id, { description, category, value, receiptPath }) {
-  const dbPatch = { description, category, value };
-  if (receiptPath !== undefined) dbPatch.receipt_path = receiptPath;
-  const { data, error } = await supabase.from('despesas').update(dbPatch).eq('id', id).select().single();
+export async function updateDespesa(id, { description, category, value }) {
+  const { data, error } = await supabase.from('despesas').update({ description, category, value }).eq('id', id).select().single();
   if (error) throw error;
   return mapDespesa(data);
 }
@@ -125,13 +121,6 @@ export async function updateDespesa(id, { description, category, value, receiptP
 export async function deleteDespesa(id) {
   const { error } = await supabase.from('despesas').delete().eq('id', id);
   if (error) throw error;
-}
-
-export async function uploadReceipt(file) {
-  const path = `${Date.now()}-${file.name}`;
-  const { error } = await supabase.storage.from('comprovantes').upload(path, file);
-  if (error) throw error;
-  return path;
 }
 
 // ---- admins ----

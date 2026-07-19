@@ -57,7 +57,6 @@ create table if not exists despesas (
   description text not null,
   category text not null default 'Outros',
   value numeric(10,2) not null,
-  receipt_path text,
   created_at timestamptz not null default now()
 );
 
@@ -264,17 +263,3 @@ drop trigger if exists protect_associado_fields_trigger on associados;
 create trigger protect_associado_fields_trigger
   before update on associados
   for each row execute function protect_associado_fields();
-
--- ============================================================
--- Storage: bucket para comprovantes de despesas
--- ============================================================
-insert into storage.buckets (id, name, public)
-values ('comprovantes', 'comprovantes', false)
-on conflict (id) do nothing;
-
-create policy "comprovantes_admin_read" on storage.objects
-  for select using (bucket_id = 'comprovantes' and is_admin());
-create policy "comprovantes_admin_write" on storage.objects
-  for insert with check (bucket_id = 'comprovantes' and is_admin());
-create policy "comprovantes_admin_delete" on storage.objects
-  for delete using (bucket_id = 'comprovantes' and is_admin());

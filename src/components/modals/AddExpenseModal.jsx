@@ -8,7 +8,6 @@ export default function AddExpenseModal({
   setDescription,
   setCategory,
   setValue,
-  handleReceiptFile,
   close,
   confirm,
 }) {
@@ -31,29 +30,7 @@ export default function AddExpenseModal({
         <option value="Outros">Outros</option>
       </select>
       <label style={fieldLabelStyle}>Valor (R$)</label>
-      <input type="number" step="0.01" value={newExpense.value} onChange={setValue} style={fieldInputStyle} />
-      <label style={fieldLabelStyle}>Comprovante</label>
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          boxSizing: 'border-box',
-          border: '1.5px dashed oklch(80% 0.01 230)',
-          background: 'oklch(98% 0.004 230)',
-          borderRadius: 9,
-          padding: 12,
-          fontSize: 12.5,
-          color: 'oklch(45% 0.13 210)',
-          cursor: 'pointer',
-          marginBottom: 20,
-          fontWeight: 600,
-        }}
-      >
-        {newExpense.receiptLabel}
-        <input type="file" onChange={handleReceiptFile} style={{ display: 'none' }} />
-      </label>
+      <input type="number" step="0.01" value={newExpense.value} onChange={setValue} style={{ ...fieldInputStyle, marginBottom: 20 }} />
       <div style={{ display: 'flex', gap: 10 }}>
         <button onClick={close} style={cancelBtnStyle}>
           Cancelar

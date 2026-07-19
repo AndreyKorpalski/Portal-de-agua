@@ -90,12 +90,3 @@ export function CheckIcon({ size = 13 }) {
     </svg>
   );
 }
-
-export function FileIcon({ size = 13 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M14 2.5H6a1 1 0 0 0-1 1v17a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8Z" />
-      <path d="M14 2.5V8h5" />
-    </svg>
-  );
-}

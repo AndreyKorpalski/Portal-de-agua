@@ -57,24 +57,7 @@ export default function Historico({ paymentHistory }) {
                   {p.statusLabel}
                 </span>
               </div>
-              {p.canDownload && (
-                <button
-                  onClick={p.onDownload}
-                  style={{
-                    background: 'none',
-                    border: '1px solid oklch(89% 0.01 230)',
-                    borderRadius: 7,
-                    padding: '6px 10px',
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    color: 'oklch(35% 0.02 230)',
-                    cursor: 'pointer',
-                    justifySelf: 'start',
-                  }}
-                >
-                  Baixar comprovante
-                </button>
-              )}
+              <div></div>
             </div>
           ))}
         </div>

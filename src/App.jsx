@@ -22,7 +22,7 @@ import { supabase } from './lib/supabaseClient';
 import { signIn, signUp, signOut, fetchProfile } from './lib/auth';
 import {
   fetchAssociados, insertAssociado, updateAssociado, deleteAssociado,
-  fetchDespesas, insertDespesa, updateDespesa, deleteDespesa, uploadReceipt,
+  fetchDespesas, insertDespesa, updateDespesa, deleteDespesa,
   fetchAdmins, insertAdmin, deleteAdmin,
   fetchOwnAssociado, fetchFaturasByAssociado, fetchFaturas, insertFatura, markFaturasPaid,
 } from './lib/db';
@@ -46,7 +46,7 @@ const INITIAL_STATE = {
   toast: null,
   showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
   newAssociado: { name: '', unit: '', email: '', value: 80 },
-  newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null },
+  newExpense: { description: '', category: 'Manutenção', value: '' },
   editingExpenseId: null,
   associadoSearch: '', associadoPage: 0, associadoPageSize: 5,
   isMobile: false,
@@ -62,7 +62,7 @@ const BLANK_UI_STATE = {
   toast: null,
   showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
   newAssociado: { name: '', unit: '', email: '', value: 80 },
-  newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null },
+  newExpense: { description: '', category: 'Manutenção', value: '' },
   editingExpenseId: null,
   associadoSearch: '', associadoPage: 0,
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
@@ -269,39 +269,27 @@ export default function App() {
   };
 
   // --- despesas (admin) ---
-  const openAddExpense = () => setState({ showAddExpense: true, editingExpenseId: null, newExpense: { description: '', category: 'Manutenção', value: '', receiptLabel: '+ Anexar arquivo', receiptPath: null } });
+  const openAddExpense = () => setState({ showAddExpense: true, editingExpenseId: null, newExpense: { description: '', category: 'Manutenção', value: '' } });
   const openEditExpense = (exp) =>
     setState({
       showAddExpense: true,
       editingExpenseId: exp.id,
-      newExpense: { description: exp.description, category: exp.category, value: exp.value, receiptLabel: exp.receiptPath ? '✓ ' + exp.receipt : '+ Anexar arquivo', receiptPath: exp.receiptPath },
+      newExpense: { description: exp.description, category: exp.category, value: exp.value },
     });
   const closeAddExpense = () => setState({ showAddExpense: false, editingExpenseId: null });
   const setNewExpenseDescription = (e) => setState((p) => ({ newExpense: { ...p.newExpense, description: e.target.value } }));
   const setNewExpenseCategory = (e) => setState((p) => ({ newExpense: { ...p.newExpense, category: e.target.value } }));
   const setNewExpenseValue = (e) => setState((p) => ({ newExpense: { ...p.newExpense, value: e.target.value } }));
-  const handleReceiptFile = async (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: 'Enviando...' } }));
-    try {
-      const path = await uploadReceipt(f);
-      setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: '✓ ' + f.name, receiptPath: path } }));
-    } catch (err) {
-      setState((p) => ({ newExpense: { ...p.newExpense, receiptLabel: '+ Anexar arquivo' } }));
-      showToast('Erro ao enviar arquivo: ' + err.message);
-    }
-  };
   const confirmAddExpense = async () => {
     const n = s.newExpense;
     if (!n.description.trim() || !n.value) return;
     try {
       if (s.editingExpenseId) {
-        const updated = await updateDespesa(s.editingExpenseId, { description: n.description, category: n.category, value: parseFloat(n.value) || 0, receiptPath: n.receiptPath });
+        const updated = await updateDespesa(s.editingExpenseId, { description: n.description, category: n.category, value: parseFloat(n.value) || 0 });
         setState((p) => ({ despesas: p.despesas.map((x) => (x.id === updated.id ? updated : x)), showAddExpense: false, editingExpenseId: null }));
         showToast('Despesa atualizada');
       } else {
-        const created = await insertDespesa({ description: n.description, category: n.category, value: parseFloat(n.value) || 0, receiptPath: n.receiptPath });
+        const created = await insertDespesa({ description: n.description, category: n.category, value: parseFloat(n.value) || 0 });
         setState((p) => ({ despesas: [created, ...p.despesas], showAddExpense: false }));
         showToast('Despesa lançada');
       }
@@ -602,7 +590,6 @@ export default function App() {
       statusLabel: 'Pago',
       statusBg: STATUS_META.pago.bg,
       statusColor: STATUS_META.pago.color,
-      canDownload: false,
     }));
 
   const qrCells = Array.from({ length: 100 }, (_, i) => {
@@ -786,7 +773,6 @@ export default function App() {
           setDescription={setNewExpenseDescription}
           setCategory={setNewExpenseCategory}
           setValue={setNewExpenseValue}
-          handleReceiptFile={handleReceiptFile}
           close={closeAddExpense}
           confirm={confirmAddExpense}
         />
