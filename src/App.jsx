@@ -26,6 +26,7 @@ import {
   fetchAdmins, insertAdmin, deleteAdmin,
   fetchOwnAssociado, fetchFaturasByAssociado, fetchFaturas, insertFatura, markFaturasPaid,
 } from './lib/db';
+import { exportReportPdf, exportReportCsv } from './lib/reports';
 
 const MONTH_ABBR_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -366,8 +367,25 @@ export default function App() {
     showToast('Código copiado');
   };
   const downloadBoleto = () => showToast('Download do boleto iniciado');
-  const exportPdf = () => showToast('Exportando relatório em PDF...');
-  const exportCsv = () => showToast('Exportando relatório em CSV...');
+  const now = new Date();
+  const periodLabel = `${MONTH_NAMES_PT[now.getMonth()]} de ${now.getFullYear()}`;
+  const exportPdf = async () => {
+    try {
+      showToast('Gerando PDF...');
+      await exportReportPdf({ periodLabel, stats, expenses, associados });
+      showToast('Relatório em PDF baixado');
+    } catch (err) {
+      showToast('Erro ao gerar PDF: ' + err.message);
+    }
+  };
+  const exportCsv = () => {
+    try {
+      exportReportCsv({ periodLabel, stats, expenses, associados });
+      showToast('Relatório em CSV baixado');
+    } catch (err) {
+      showToast('Erro ao gerar CSV: ' + err.message);
+    }
+  };
 
   // --- perfil (associado edita o próprio; admin edita o de qualquer associado) ---
   const openEditProfile = () => {
@@ -685,7 +703,9 @@ export default function App() {
         )}
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && <Despesas expenses={expenses} openAddExpense={openAddExpense} />}
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'administradores' && <Administradores isMobile={isMobile} admins={admins} openAddAdmin={openAddAdmin} />}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'relatorios' && <Relatorios stats={stats} exportPdf={exportPdf} exportCsv={exportCsv} />}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'relatorios' && (
+          <Relatorios periodLabel={periodLabel} stats={stats} exportPdf={exportPdf} exportCsv={exportCsv} />
+        )}
 
         {!s.dataLoading && s.profile.role === 'associado' && !assocProfile && (
           <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)' }}>

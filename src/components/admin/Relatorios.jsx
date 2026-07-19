@@ -1,10 +1,10 @@
-export default function Relatorios({ stats, exportPdf, exportCsv }) {
+export default function Relatorios({ periodLabel, stats, exportPdf, exportCsv }) {
   return (
     <>
       <h1 style={{ fontSize: 23, fontWeight: 800, color: 'oklch(18% 0.02 230)', margin: '0 0 4px' }}>Relatórios</h1>
       <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 20px' }}>Exporte o resumo financeiro do período atual</p>
       <div style={{ background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, padding: 26, maxWidth: 520 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(25% 0.02 230)', marginBottom: 16 }}>Julho de 2026</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(25% 0.02 230)', marginBottom: 16 }}>{periodLabel}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
             <span style={{ color: 'oklch(50% 0.01 230)' }}>Total arrecadado</span>
