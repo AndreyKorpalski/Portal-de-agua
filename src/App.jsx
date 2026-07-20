@@ -440,7 +440,16 @@ export default function App() {
       statusBg: meta.bg,
       statusColor: meta.color,
       onOpenProfile: () => openViewProfile(a.id),
+      // onChange só atualiza a tela; a gravação no banco só acontece no blur
+      // (sair do campo). Gravar a cada tecla causava valor 0 sempre que o
+      // campo passava por um instante vazio (ex: selecionar tudo e digitar
+      // de novo) — e como as chamadas não são ordenadas, um "0" digitado no
+      // meio da edição podia chegar ao banco DEPOIS do valor final digitado.
       onValueChange: (e) => {
+        const raw = e.target.value;
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, value: raw } : x)) }));
+      },
+      onValueBlur: (e) => {
         const v = parseFloat(e.target.value) || 0;
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, value: v } : x)) }));
         updateAssociado(a.id, { value: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
@@ -448,7 +457,11 @@ export default function App() {
       dueDateColor: isAtrasado ? 'oklch(50% 0.18 25)' : 'oklch(20% 0.02 230)',
       dueDateBorder: isAtrasado ? 'oklch(75% 0.1 25)' : 'oklch(89% 0.01 230)',
       onConsumptionChange: (e) => {
-        const v = Number(e.target.value);
+        const raw = e.target.value;
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: raw } : x)) }));
+      },
+      onConsumptionBlur: (e) => {
+        const v = Number(e.target.value) || 0;
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v } : x)) }));
         updateAssociado(a.id, { consumption: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
       },
@@ -460,6 +473,9 @@ export default function App() {
       onDueDateChange: (e) => {
         const v = e.target.value;
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, dueDate: v } : x)) }));
+      },
+      onDueDateBlur: (e) => {
+        const v = e.target.value;
         updateAssociado(a.id, { dueDate: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
       },
       showCobrar: !isPago && !sameMonth(a.lastChargeSentAt),

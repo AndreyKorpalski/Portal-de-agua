@@ -173,6 +173,7 @@ export default function Associados({
                   step="0.01"
                   value={assoc.value}
                   onChange={assoc.onValueChange}
+                  onBlur={assoc.onValueBlur}
                   style={{
                     width: 66,
                     border: '1px solid oklch(89% 0.01 230)',
@@ -187,6 +188,7 @@ export default function Associados({
                 type="number"
                 value={assoc.consumption}
                 onChange={assoc.onConsumptionChange}
+                onBlur={assoc.onConsumptionBlur}
                 style={{
                   width: 50,
                   border: '1px solid oklch(89% 0.01 230)',
@@ -199,6 +201,7 @@ export default function Associados({
               <input
                 value={assoc.dueDate}
                 onChange={assoc.onDueDateChange}
+                onBlur={assoc.onDueDateBlur}
                 style={{
                   width: 50,
                   border: `1px solid ${assoc.dueDateBorder}`,
