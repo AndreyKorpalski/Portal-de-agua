@@ -67,6 +67,7 @@ const INITIAL_STATE = {
   selectedInvoiceIds: {},
   confirmDialog: null,
   showBillingSettings: false, billingSettingsDraft: null,
+  sendingChargeIds: {}, bulkCobrancaSending: false,
 };
 
 const BLANK_UI_STATE = {
@@ -84,6 +85,7 @@ const BLANK_UI_STATE = {
   selectedInvoiceIds: {},
   confirmDialog: null,
   showBillingSettings: false, billingSettingsDraft: null,
+  sendingChargeIds: {}, bulkCobrancaSending: false,
 };
 
 function useMergeState(initial) {
@@ -248,34 +250,55 @@ export default function App() {
   const enviarCobranca = async (id, name) => {
     const a = s.associados.find((x) => x.id === id);
     if (a && sameMonth(a.lastChargeSentAt)) return;
+    setState((p) => ({ sendingChargeIds: { ...p.sendingChargeIds, [id]: true } }));
     try {
-      showToast(`Enviando cobrança para ${name}...`);
       await sendCobrancaEmail(id);
       const now = new Date().toISOString();
       setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, lastChargeSentAt: now } : x)) }));
       updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + translateError(err.message)));
       showToast(`Cobrança enviada para ${name} por e-mail`);
     } catch (err) {
-      showToast(`Erro ao enviar cobrança para ${name}: ` + err.message);
+      showToast(`Erro ao enviar cobrança para ${name}: ` + translateError(err.message));
+    } finally {
+      setState((p) => {
+        const next = { ...p.sendingChargeIds };
+        delete next[id];
+        return { sendingChargeIds: next };
+      });
     }
   };
-  const cobrarTodos = async () => {
+  const doCobrarTodos = async () => {
     const pendentes = s.associados.filter((a) => a.status !== 'pago' && !sameMonth(a.lastChargeSentAt));
     if (pendentes.length === 0) { showToast('Todas as cobranças do mês já foram enviadas'); return; }
+    setState({ bulkCobrancaSending: true });
     showToast(`Enviando cobrança para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'}...`);
-    // envia no máximo 5 e-mails em paralelo — evita esmagar o limite de
-    // taxa do provedor de e-mail quando há milhares de associados
-    const results = await mapWithConcurrency(pendentes, 5, (a) => sendCobrancaEmail(a.id));
-    const now = new Date().toISOString();
-    const succeeded = pendentes.filter((_, i) => results[i].status === 'fulfilled');
-    const succeededIds = new Set(succeeded.map((a) => a.id));
-    setState((p) => ({ associados: p.associados.map((a) => (succeededIds.has(a.id) ? { ...a, lastChargeSentAt: now } : a)) }));
-    await Promise.all(succeeded.map((a) => updateAssociado(a.id, { lastChargeSentAt: now }).catch(() => {})));
-    const failed = pendentes.length - succeeded.length;
-    showToast(
-      `Cobrança enviada para ${succeeded.length} associado${succeeded.length === 1 ? '' : 's'}` +
-        (failed ? ` — ${failed} falharam` : ''),
-    );
+    try {
+      // envia no máximo 5 e-mails em paralelo — evita esmagar o limite de
+      // taxa do provedor de e-mail quando há milhares de associados
+      const results = await mapWithConcurrency(pendentes, 5, (a) => sendCobrancaEmail(a.id));
+      const now = new Date().toISOString();
+      const succeeded = pendentes.filter((_, i) => results[i].status === 'fulfilled');
+      const succeededIds = new Set(succeeded.map((a) => a.id));
+      setState((p) => ({ associados: p.associados.map((a) => (succeededIds.has(a.id) ? { ...a, lastChargeSentAt: now } : a)) }));
+      await Promise.all(succeeded.map((a) => updateAssociado(a.id, { lastChargeSentAt: now }).catch(() => {})));
+      const failed = pendentes.length - succeeded.length;
+      showToast(
+        `Cobrança enviada para ${succeeded.length} associado${succeeded.length === 1 ? '' : 's'}` +
+          (failed ? ` — ${failed} falharam: ${translateError(results.find((r) => r.status === 'rejected')?.reason?.message)}` : ''),
+      );
+    } finally {
+      setState({ bulkCobrancaSending: false });
+    }
+  };
+  const cobrarTodos = () => {
+    const pendentes = s.associados.filter((a) => a.status !== 'pago' && !sameMonth(a.lastChargeSentAt));
+    if (pendentes.length === 0) { showToast('Todas as cobranças do mês já foram enviadas'); return; }
+    askConfirm({
+      title: 'Cobrar todos os associados pendentes?',
+      message: `Vamos enviar cobrança por e-mail para ${pendentes.length} associado${pendentes.length === 1 ? '' : 's'} que ainda não pagaram este mês.`,
+      confirmLabel: 'Cobrar todos',
+      onConfirm: doCobrarTodos,
+    });
   };
 
   const openBulkDueDate = () => setState({ showBulkDueDate: true });
@@ -294,7 +317,7 @@ export default function App() {
     }
   };
 
-  const generateMonthlyCharges = async () => {
+  const doGenerateMonthlyCharges = async () => {
     const now = new Date();
     const year = now.getFullYear();
     const monthNum = now.getMonth() + 1;
@@ -327,6 +350,22 @@ export default function App() {
     } catch (err) {
       showToast('Erro: ' + translateError(err.message));
     }
+  };
+  const generateMonthlyCharges = () => {
+    const now = new Date();
+    const monthLabel = `${MONTH_NAMES_PT[now.getMonth()]}/${now.getFullYear()}`;
+    const alreadyBilled = new Set(s.allFaturas.filter((f) => f.month === monthLabel).map((f) => f.associadoId));
+    const pending = s.associados.filter((a) => !alreadyBilled.has(a.id));
+    if (pending.length === 0) {
+      showToast(`Cobranças de ${monthLabel} já foram geradas para todos os associados`);
+      return;
+    }
+    askConfirm({
+      title: 'Gerar cobranças do mês?',
+      message: `Isso cria uma fatura pendente de ${monthLabel} para ${pending.length} associado${pending.length === 1 ? '' : 's'}.`,
+      confirmLabel: 'Gerar cobranças',
+      onConfirm: doGenerateMonthlyCharges,
+    });
   };
 
   const openBillingSettings = () => setState({ showBillingSettings: true, billingSettingsDraft: { ...s.billingSettings, extraCharges: s.billingSettings.extraCharges.map((c) => ({ ...c })) } });
@@ -530,6 +569,7 @@ export default function App() {
     const meta = STATUS_META[a.status];
     const isPago = a.status === 'pago';
     const isAtrasado = a.status === 'atrasado';
+    const isSending = !!s.sendingChargeIds[a.id];
     const multa = multaFor(a.value, a.status);
     return {
       ...a,
@@ -591,7 +631,8 @@ export default function App() {
       showCobrar: !isPago && !sameMonth(a.lastChargeSentAt),
       showEnviado: !isPago && sameMonth(a.lastChargeSentAt),
       showCobrado: isPago,
-      cobrarLabel: isAtrasado ? 'Cobrar novamente' : 'Cobrar',
+      cobrarSending: isSending,
+      cobrarLabel: isSending ? 'Enviando...' : isAtrasado ? 'Cobrar novamente' : 'Cobrar',
       cobrarBg: isAtrasado ? 'oklch(93% 0.05 25)' : '#fff',
       cobrarColor: isAtrasado ? 'oklch(45% 0.15 25)' : 'oklch(32% 0.08 220)',
       cobrarBorder: isAtrasado ? 'oklch(85% 0.06 25)' : 'oklch(32% 0.08 220)',
@@ -860,6 +901,7 @@ export default function App() {
             generateMonthlyCharges={generateMonthlyCharges}
             openBulkDueDate={openBulkDueDate}
             cobrarTodos={cobrarTodos}
+            cobrarTodosSending={s.bulkCobrancaSending}
             openBillingSettings={openBillingSettings}
           />
         )}

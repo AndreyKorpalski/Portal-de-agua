@@ -15,6 +15,7 @@ export default function Cobranca({
   generateMonthlyCharges,
   openBulkDueDate,
   cobrarTodos,
+  cobrarTodosSending,
   openBillingSettings,
 }) {
   const headerStyle = {
@@ -58,8 +59,8 @@ export default function Cobranca({
           <button onClick={openBulkDueDate} style={secondaryBtn}>
             Alterar vencimento de todos
           </button>
-          <button onClick={cobrarTodos} style={secondaryBtn}>
-            Cobrar todos
+          <button onClick={cobrarTodos} disabled={cobrarTodosSending} style={{ ...secondaryBtn, opacity: cobrarTodosSending ? 0.6 : 1, cursor: cobrarTodosSending ? 'default' : 'pointer' }}>
+            {cobrarTodosSending ? 'Enviando...' : 'Cobrar todos'}
           </button>
           <button onClick={openBillingSettings} style={secondaryBtn}>
             Configurar valores
@@ -228,6 +229,7 @@ export default function Cobranca({
               {assoc.showCobrar && (
                 <button
                   onClick={assoc.onCobrar}
+                  disabled={assoc.cobrarSending}
                   style={{
                     background: assoc.cobrarBg,
                     color: assoc.cobrarColor,
@@ -236,7 +238,8 @@ export default function Cobranca({
                     padding: '6px 10px',
                     fontSize: 11.5,
                     fontWeight: 700,
-                    cursor: 'pointer',
+                    cursor: assoc.cobrarSending ? 'default' : 'pointer',
+                    opacity: assoc.cobrarSending ? 0.6 : 1,
                     whiteSpace: 'nowrap',
                   }}
                 >

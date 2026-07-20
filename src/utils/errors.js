@@ -5,6 +5,10 @@ const EXACT_MESSAGES = {
 };
 
 const PATTERN_MESSAGES = [
+  {
+    test: /failed to send a request to the edge function/i,
+    message: 'Não foi possível conectar ao serviço de envio de e-mail. A função "send-cobranca" pode não estar publicada no Supabase — confira em Edge Functions no painel do projeto.',
+  },
   { test: /fetch|network|connection/i, message: 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.' },
   { test: /associados_email_unique/i, message: 'Já existe um associado cadastrado com esse e-mail.' },
   { test: /faturas_associado_month_unique/i, message: 'Já existe uma cobrança gerada para esse associado neste mês.' },
