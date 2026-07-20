@@ -55,7 +55,7 @@ const INITIAL_STATE = {
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
   showBulkDueDate: false, bulkDueDate: '10/08',
   showViewProfile: false, viewProfileId: null,
-  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '' },
+  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
 };
 
@@ -70,7 +70,7 @@ const BLANK_UI_STATE = {
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
   showBulkDueDate: false, bulkDueDate: '10/08',
   showViewProfile: false, viewProfileId: null,
-  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '' },
+  showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
 };
 
@@ -396,18 +396,19 @@ export default function App() {
   const openEditProfile = () => {
     const p = s.ownAssociado;
     if (!p) return;
-    setState({ showEditProfile: true, editingAssociadoId: p.id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
+    setState({ showEditProfile: true, editingAssociadoId: p.id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address, unit: p.unit } });
   };
   const openAdminEditAssociado = (id) => {
     const p = s.associados.find((x) => x.id === id);
     if (!p) return;
-    setState({ showViewProfile: false, showEditProfile: true, editingAssociadoId: id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address } });
+    setState({ showViewProfile: false, showEditProfile: true, editingAssociadoId: id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address, unit: p.unit } });
   };
   const closeEditProfile = () => setState({ showEditProfile: false, editingAssociadoId: null });
   const setEditProfileName = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, name: e.target.value } }));
   const setEditProfileEmail = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, email: e.target.value } }));
   const setEditProfilePhone = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, phone: e.target.value } }));
   const setEditProfileAddress = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, address: e.target.value } }));
+  const setEditProfileUnit = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, unit: e.target.value } }));
   const saveEditProfile = async () => {
     if (!s.editingAssociadoId) return;
     try {
@@ -771,10 +772,12 @@ export default function App() {
         <EditProfileModal
           width={modalWidth}
           draft={s.editProfileDraft}
+          isAdmin={s.profile.role === 'admin'}
           setName={setEditProfileName}
           setEmail={setEditProfileEmail}
           setPhone={setEditProfilePhone}
           setAddress={setEditProfileAddress}
+          setUnit={setEditProfileUnit}
           close={closeEditProfile}
           save={saveEditProfile}
         />

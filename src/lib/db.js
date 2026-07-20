@@ -83,6 +83,7 @@ export async function updateAssociado(id, patch) {
   if ('email' in patch) dbPatch.email = patch.email;
   if ('phone' in patch) dbPatch.phone = patch.phone;
   if ('address' in patch) dbPatch.address = patch.address;
+  if ('unit' in patch) dbPatch.unit = patch.unit;
   if ('lastChargeSentAt' in patch) dbPatch.last_charge_sent_at = patch.lastChargeSentAt;
   const { data, error } = await supabase.from('associados').update(dbPatch).eq('id', id).select().single();
   if (error) throw error;

@@ -3,18 +3,28 @@ import ModalShell, { fieldLabelStyle, fieldInputStyle, cancelBtnStyle, confirmBt
 export default function EditProfileModal({
   width,
   draft,
+  isAdmin,
   setName,
   setEmail,
   setPhone,
   setAddress,
+  setUnit,
   close,
   save,
 }) {
   return (
     <ModalShell width={width}>
-      <div style={{ fontSize: 16, fontWeight: 800, color: 'oklch(18% 0.02 230)', marginBottom: 18 }}>Meu perfil</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: 'oklch(18% 0.02 230)', marginBottom: 18 }}>
+        {isAdmin ? 'Editar associado' : 'Meu perfil'}
+      </div>
       <label style={fieldLabelStyle}>Nome completo</label>
       <input value={draft.name} onChange={setName} style={fieldInputStyle} />
+      {isAdmin && (
+        <>
+          <label style={fieldLabelStyle}>Unidade</label>
+          <input value={draft.unit} onChange={setUnit} style={fieldInputStyle} placeholder="Ex: Lote 24" />
+        </>
+      )}
       <label style={fieldLabelStyle}>E-mail</label>
       <input value={draft.email} onChange={setEmail} style={fieldInputStyle} />
       <label style={fieldLabelStyle}>Telefone</label>
