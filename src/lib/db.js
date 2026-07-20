@@ -177,6 +177,33 @@ export async function markFaturasPaid(ids, paymentMethod) {
   return data.map(mapFatura);
 }
 
+// ---- configuração de cobrança (valor mínimo, valor por m³, custos extras) ----
+
+function mapBillingSettings(row) {
+  return {
+    minValue: Number(row.min_value),
+    pricePerM3: Number(row.price_per_m3),
+    extraCharges: (row.extra_charges || []).map((c) => ({ label: c.label, value: Number(c.value) })),
+  };
+}
+
+export async function fetchBillingSettings() {
+  const { data, error } = await supabase.from('billing_settings').select('*').eq('id', 1).single();
+  if (error) throw error;
+  return mapBillingSettings(data);
+}
+
+export async function updateBillingSettings({ minValue, pricePerM3, extraCharges }) {
+  const { data, error } = await supabase
+    .from('billing_settings')
+    .update({ min_value: minValue, price_per_m3: pricePerM3, extra_charges: extraCharges })
+    .eq('id', 1)
+    .select()
+    .single();
+  if (error) throw error;
+  return mapBillingSettings(data);
+}
+
 // ---- cobrança por e-mail (Edge Function + Resend) ----
 
 export async function sendCobrancaEmail(associadoId) {

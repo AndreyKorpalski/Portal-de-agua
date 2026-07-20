@@ -26,3 +26,10 @@ export async function fetchProfile(userId) {
   if (error) throw error;
   return data;
 }
+
+export async function sendPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/`,
+  });
+  if (error) throw error;
+}

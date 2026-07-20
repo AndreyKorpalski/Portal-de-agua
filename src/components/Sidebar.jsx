@@ -2,6 +2,7 @@ import {
   DropletIcon,
   DashboardIcon,
   AssociadosIcon,
+  CobrancaIcon,
   DespesasIcon,
   AdministradoresIcon,
   RelatoriosIcon,
@@ -17,6 +18,7 @@ export default function Sidebar({
   assocPage,
   goAdminDashboard,
   goAdminAssociados,
+  goAdminCobranca,
   goAdminDespesas,
   goAdminAdministradores,
   goAdminRelatorios,
@@ -85,7 +87,7 @@ export default function Sidebar({
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '6px 10px 22px', flex: 'none' }}>
         <DropletIcon size={22} stroke="oklch(32% 0.08 220)" strokeWidth={1.8} />
         <span style={{ fontSize: 14.5, fontWeight: 700, color: 'oklch(20% 0.02 230)', whiteSpace: 'nowrap' }}>
-          Associação das Águas
+          Portal Amolina
         </span>
       </div>
 
@@ -98,6 +100,10 @@ export default function Sidebar({
           <button onClick={goAdminAssociados} style={navBtn(adminPage === 'associados')}>
             <AssociadosIcon />
             Associados
+          </button>
+          <button onClick={goAdminCobranca} style={navBtn(adminPage === 'cobranca')}>
+            <CobrancaIcon />
+            Cobrança
           </button>
           <button onClick={goAdminDespesas} style={navBtn(adminPage === 'despesas')}>
             <DespesasIcon />

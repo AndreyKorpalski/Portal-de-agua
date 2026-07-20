@@ -1,6 +1,6 @@
 import ModalShell from './ModalShell';
 
-export default function ViewProfileModal({ width, data, close, edit }) {
+export default function ViewProfileModal({ width, data, close, edit, resetPassword }) {
   if (!data) return null;
   return (
     <ModalShell width={width}>
@@ -77,6 +77,24 @@ export default function ViewProfileModal({ width, data, close, edit }) {
           </button>
         )}
       </div>
+      {resetPassword && (
+        <button
+          onClick={resetPassword}
+          style={{
+            width: '100%',
+            marginTop: 10,
+            background: 'none',
+            border: 'none',
+            color: 'oklch(45% 0.13 230)',
+            fontSize: 12.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            padding: 6,
+          }}
+        >
+          Redefinir senha
+        </button>
+      )}
     </ModalShell>
   );
 }

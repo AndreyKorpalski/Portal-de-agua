@@ -1,3 +1,5 @@
+import { TrashIcon } from '../icons';
+
 export default function Administradores({ isMobile, admins, openAddAdmin }) {
   const adminsGridStyle = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 14 };
 
@@ -70,8 +72,13 @@ export default function Administradores({ isMobile, admins, openAddAdmin }) {
               <div style={{ fontSize: 11.5, color: 'oklch(55% 0.01 230)' }}>{adm.email}</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'oklch(45% 0.13 210)', marginTop: 2 }}>{adm.cargo}</div>
             </div>
-            <button onClick={adm.onDelete} style={{ background: 'none', border: 'none', color: 'oklch(55% 0.01 230)', cursor: 'pointer', fontSize: 12 }}>
-              Remover
+            <button
+              onClick={adm.onDelete}
+              title="Remover administrador"
+              aria-label="Remover administrador"
+              style={{ background: 'none', border: 'none', color: 'oklch(55% 0.01 230)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}
+            >
+              <TrashIcon />
             </button>
           </div>
         ))}

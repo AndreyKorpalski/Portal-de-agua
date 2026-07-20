@@ -2,7 +2,7 @@
 //
 // Deploy: supabase functions deploy send-cobranca
 // Segredo necessário: supabase secrets set RESEND_API_KEY=re_xxxxxxxx
-// Opcional: supabase secrets set COBRANCA_FROM_EMAIL="Associação das Águas <cobranca@seudominio.com.br>"
+// Opcional: supabase secrets set COBRANCA_FROM_EMAIL="Portal Amolina <cobranca@seudominio.com.br>"
 //   (sem isso, usa o domínio de testes do Resend, que só entrega para o
 //   próprio e-mail da conta Resend — configure um domínio verificado
 //   antes de cobrar associados de verdade)
@@ -11,7 +11,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const FROM_EMAIL = Deno.env.get('COBRANCA_FROM_EMAIL') ?? 'Associação das Águas <onboarding@resend.dev>';
+const FROM_EMAIL = Deno.env.get('COBRANCA_FROM_EMAIL') ?? 'Portal Amolina <onboarding@resend.dev>';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
 
     const html = `
       <div style="font-family: -apple-system, Arial, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
-        <h2 style="color:#1e405a; margin-bottom: 4px;">Associação das Águas</h2>
+        <h2 style="color:#1e405a; margin-bottom: 4px;">Portal Amolina</h2>
         <p>Olá, ${escapeHtml(associado.name)},</p>
         <p>Sua fatura de água (${escapeHtml(associado.unit || '')}) está ${atrasado ? '<strong style="color:#b91c1c;">em atraso</strong>' : 'em aberto'}:</p>
         <p style="font-size:26px; font-weight:bold; color:#1e405a; margin: 12px 0;">${valueFmt}</p>

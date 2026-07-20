@@ -1,4 +1,4 @@
-export default function Dashboard({ isMobile, stats, revenueBars, donutSegments, overdueList, goAdminAssociados }) {
+export default function Dashboard({ isMobile, stats, revenueBars, donutSegments, overdueList, goAdminCobranca }) {
   const statsGridStyle = {
     display: 'grid',
     gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)',
@@ -134,7 +134,7 @@ export default function Dashboard({ isMobile, stats, revenueBars, donutSegments,
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              goAdminAssociados();
+              goAdminCobranca();
             }}
             style={{ fontSize: 12.5, textDecoration: 'none', fontWeight: 600 }}
           >

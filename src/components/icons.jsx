@@ -83,10 +83,30 @@ export function HistoricoIcon() {
   );
 }
 
+export function CobrancaIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v9M14.8 9.8c0-1.3-1.25-2.3-2.8-2.3s-2.8 1-2.8 2.1c0 3.15 5.6 1.6 5.6 4.7 0 1.15-1.25 2.1-2.8 2.1s-2.8-1-2.8-2.3" />
+    </svg>
+  );
+}
+
 export function CheckIcon({ size = 13 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
       <path d="M4 12.5 9.5 18 20 6" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ size = 15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 6.5h16" />
+      <path d="M8.5 6.5V4.8c0-.7.6-1.3 1.3-1.3h4.4c.7 0 1.3.6 1.3 1.3v1.7" />
+      <path d="M6 6.5 6.8 19a2 2 0 0 0 2 1.9h6.4a2 2 0 0 0 2-1.9l.8-12.5" />
+      <path d="M10 10.5v6M14 10.5v6" />
     </svg>
   );
 }

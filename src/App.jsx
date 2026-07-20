@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Login from './components/Login';
+import Cadastro from './components/Cadastro';
 import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
 import Dashboard from './components/admin/Dashboard';
 import Associados from './components/admin/Associados';
+import Cobranca from './components/admin/Cobranca';
 import Despesas from './components/admin/Despesas';
 import Administradores from './components/admin/Administradores';
 import Relatorios from './components/admin/Relatorios';
@@ -16,17 +18,21 @@ import AddAssociadoModal from './components/modals/AddAssociadoModal';
 import BulkDueDateModal from './components/modals/BulkDueDateModal';
 import AddExpenseModal from './components/modals/AddExpenseModal';
 import AddAdminModal from './components/modals/AddAdminModal';
+import ConfirmModal from './components/modals/ConfirmModal';
+import BillingSettingsModal from './components/modals/BillingSettingsModal';
 import { brl, initials, seeded, multaFor, STATUS_META } from './utils/format';
+import { translateError } from './utils/errors';
 import { sameMonth, MONTH_NAMES_PT } from './utils/date';
 import { mapWithConcurrency } from './utils/concurrency';
+import { calcBillingValue } from './utils/billing';
 import { supabase } from './lib/supabaseClient';
-import { signIn, signUp, signOut, fetchProfile } from './lib/auth';
+import { signIn, signUp, signOut, fetchProfile, sendPasswordReset } from './lib/auth';
 import {
   fetchAssociados, insertAssociado, updateAssociado, deleteAssociado,
   fetchDespesas, insertDespesa, updateDespesa, deleteDespesa,
   fetchAdmins, insertAdmin, deleteAdmin,
   fetchOwnAssociado, fetchFaturasByAssociado, fetchFaturas, insertFatura, markFaturasPaid,
-  sendCobrancaEmail,
+  sendCobrancaEmail, fetchBillingSettings, updateBillingSettings,
 } from './lib/db';
 import { exportReportPdf, exportReportCsv } from './lib/reports';
 
@@ -37,10 +43,12 @@ const INITIAL_STATE = {
   session: undefined, // undefined = ainda não checou; null = deslogado; objeto = logado
   profile: null,
   authError: null,
+  authView: 'login', // 'login' | 'cadastro'
 
   // dados carregados do banco
   dataLoading: false,
   associados: [], despesas: [], admins: [], allFaturas: [], // papel admin
+  billingSettings: { minValue: 12, pricePerM3: 3, extraCharges: [] },
   ownAssociado: null, faturas: [], // papel associado
 
   // navegação / UI
@@ -57,6 +65,8 @@ const INITIAL_STATE = {
   showViewProfile: false, viewProfileId: null,
   showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
+  confirmDialog: null,
+  showBillingSettings: false, billingSettingsDraft: null,
 };
 
 const BLANK_UI_STATE = {
@@ -72,6 +82,8 @@ const BLANK_UI_STATE = {
   showViewProfile: false, viewProfileId: null,
   showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
+  confirmDialog: null,
+  showBillingSettings: false, billingSettingsDraft: null,
 };
 
 function useMergeState(initial) {
@@ -95,6 +107,18 @@ export default function App() {
     },
     [setState],
   );
+
+  // --- modal de confirmação genérico (substitui window.confirm) ---
+  const askConfirm = ({ title, message, confirmLabel, danger, onConfirm }) => {
+    setState({ confirmDialog: { title, message, confirmLabel, danger, onConfirm } });
+  };
+  const closeConfirm = () => setState({ confirmDialog: null });
+  const runConfirm = async () => {
+    const dlg = s.confirmDialog;
+    if (!dlg) return;
+    setState({ confirmDialog: null });
+    await dlg.onConfirm();
+  };
 
   // --- viewport ---
   useEffect(() => {
@@ -122,7 +146,7 @@ export default function App() {
     let active = true;
     fetchProfile(s.session.user.id)
       .then((p) => { if (active) setState({ profile: p }); })
-      .catch((err) => { if (active) showToast('Erro ao carregar perfil: ' + err.message); });
+      .catch((err) => { if (active) showToast('Erro ao carregar perfil: ' + translateError(err.message)); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.session?.user?.id]);
@@ -135,9 +159,11 @@ export default function App() {
     (async () => {
       try {
         if (s.profile.role === 'admin') {
-          const [associados, despesas, admins, allFaturas] = await Promise.all([fetchAssociados(), fetchDespesas(), fetchAdmins(), fetchFaturas()]);
+          const [associados, despesas, admins, allFaturas, billingSettings] = await Promise.all([
+            fetchAssociados(), fetchDespesas(), fetchAdmins(), fetchFaturas(), fetchBillingSettings(),
+          ]);
           if (!active) return;
-          setState({ associados, despesas, admins, allFaturas, dataLoading: false });
+          setState({ associados, despesas, admins, allFaturas, billingSettings, dataLoading: false });
         } else {
           const own = await fetchOwnAssociado(s.profile.id);
           if (!active) return;
@@ -148,7 +174,7 @@ export default function App() {
       } catch (err) {
         if (!active) return;
         setState({ dataLoading: false });
-        showToast('Erro ao carregar dados: ' + err.message);
+        showToast('Erro ao carregar dados: ' + translateError(err.message));
       }
     })();
     return () => { active = false; };
@@ -156,16 +182,34 @@ export default function App() {
   }, [s.profile?.id, s.profile?.role]);
 
   // --- auth handlers ---
-  const doSignIn = async ({ email, password }) => signIn({ email, password });
+  const doSignIn = async ({ email, password, role }) => {
+    const data = await signIn({ email, password });
+    const userId = data?.user?.id ?? data?.session?.user?.id;
+    const profile = await fetchProfile(userId);
+    if (role && profile.role !== role) {
+      await signOut();
+      const label = role === 'admin' ? 'administrador' : 'associado';
+      throw new Error(`Essa conta não é de ${label}. Verifique a aba selecionada e tente novamente.`);
+    }
+    return data;
+  };
   const doSignUp = async ({ email, password, name, role }) => signUp({ email, password, name, role });
+  const goCadastro = () => setState({ authView: 'cadastro' });
+  const goLoginView = () => setState({ authView: 'login' });
   const doLogout = async () => {
     await signOut();
-    setState({ associados: [], despesas: [], admins: [], allFaturas: [], ownAssociado: null, faturas: [], ...BLANK_UI_STATE });
+    setState({
+      associados: [], despesas: [], admins: [], allFaturas: [],
+      billingSettings: { minValue: 12, pricePerM3: 3, extraCharges: [] },
+      ownAssociado: null, faturas: [],
+      ...BLANK_UI_STATE,
+    });
   };
 
   // --- navegação ---
   const goAdminDashboard = () => setState({ adminPage: 'dashboard' });
   const goAdminAssociados = () => setState({ adminPage: 'associados' });
+  const goAdminCobranca = () => setState({ adminPage: 'cobranca' });
   const goAdminDespesas = () => setState({ adminPage: 'despesas' });
   const goAdminAdministradores = () => setState({ adminPage: 'administradores' });
   const goAdminRelatorios = () => setState({ adminPage: 'relatorios' });
@@ -180,7 +224,7 @@ export default function App() {
   const goAssociadoNextPage = () => setState((p) => ({ associadoPage: p.associadoPage + 1 }));
 
   // --- associados (admin) ---
-  const openAddAssociado = () => setState({ showAddAssociado: true, newAssociado: { name: '', unit: '', email: '', value: 80 } });
+  const openAddAssociado = () => setState({ showAddAssociado: true, newAssociado: { name: '', unit: '', email: '', value: s.billingSettings.minValue } });
   const closeAddAssociado = () => setState({ showAddAssociado: false });
   const setNewAssociadoName = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, name: e.target.value } }));
   const setNewAssociadoUnit = (e) => setState((p) => ({ newAssociado: { ...p.newAssociado, unit: e.target.value } }));
@@ -194,7 +238,7 @@ export default function App() {
       setState((p) => ({ associados: [...p.associados, a], showAddAssociado: false }));
       showToast('Associado adicionado');
     } catch (err) {
-      showToast('Erro ao adicionar associado: ' + err.message);
+      showToast('Erro ao adicionar associado: ' + translateError(err.message));
     }
   };
 
@@ -209,7 +253,7 @@ export default function App() {
       await sendCobrancaEmail(id);
       const now = new Date().toISOString();
       setState((p) => ({ associados: p.associados.map((x) => (x.id === id ? { ...x, lastChargeSentAt: now } : x)) }));
-      updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + err.message));
+      updateAssociado(id, { lastChargeSentAt: now }).catch((err) => showToast('Erro: ' + translateError(err.message)));
       showToast(`Cobrança enviada para ${name} por e-mail`);
     } catch (err) {
       showToast(`Erro ao enviar cobrança para ${name}: ` + err.message);
@@ -246,7 +290,7 @@ export default function App() {
       await Promise.all(prev.map((a) => updateAssociado(a.id, { dueDate: d })));
       showToast(`Vencimento atualizado para ${d} em todos os associados`);
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
     }
   };
 
@@ -281,7 +325,45 @@ export default function App() {
       const skipped = s.associados.length - list.length;
       showToast(`Cobranças de ${monthLabel} geradas para ${list.length} associados${skipped ? ` (${skipped} já tinham sido cobrados)` : ''}`);
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
+    }
+  };
+
+  const openBillingSettings = () => setState({ showBillingSettings: true, billingSettingsDraft: { ...s.billingSettings, extraCharges: s.billingSettings.extraCharges.map((c) => ({ ...c })) } });
+  const closeBillingSettings = () => setState({ showBillingSettings: false });
+  const setBillingMinValue = (e) => setState((p) => ({ billingSettingsDraft: { ...p.billingSettingsDraft, minValue: e.target.value } }));
+  const setBillingPricePerM3 = (e) => setState((p) => ({ billingSettingsDraft: { ...p.billingSettingsDraft, pricePerM3: e.target.value } }));
+  const addExtraCharge = () =>
+    setState((p) => ({ billingSettingsDraft: { ...p.billingSettingsDraft, extraCharges: [...p.billingSettingsDraft.extraCharges, { label: '', value: 0 }] } }));
+  const removeExtraCharge = (i) =>
+    setState((p) => ({ billingSettingsDraft: { ...p.billingSettingsDraft, extraCharges: p.billingSettingsDraft.extraCharges.filter((_, idx) => idx !== i) } }));
+  const setExtraChargeLabel = (i, e) =>
+    setState((p) => ({
+      billingSettingsDraft: {
+        ...p.billingSettingsDraft,
+        extraCharges: p.billingSettingsDraft.extraCharges.map((c, idx) => (idx === i ? { ...c, label: e.target.value } : c)),
+      },
+    }));
+  const setExtraChargeValue = (i, e) =>
+    setState((p) => ({
+      billingSettingsDraft: {
+        ...p.billingSettingsDraft,
+        extraCharges: p.billingSettingsDraft.extraCharges.map((c, idx) => (idx === i ? { ...c, value: e.target.value } : c)),
+      },
+    }));
+  const confirmBillingSettings = async () => {
+    const d = s.billingSettingsDraft;
+    const settings = {
+      minValue: parseFloat(d.minValue) || 0,
+      pricePerM3: parseFloat(d.pricePerM3) || 0,
+      extraCharges: d.extraCharges.filter((c) => c.label.trim()).map((c) => ({ label: c.label.trim(), value: parseFloat(c.value) || 0 })),
+    };
+    try {
+      const saved = await updateBillingSettings(settings);
+      setState({ billingSettings: saved, showBillingSettings: false });
+      showToast('Valores de cobrança atualizados');
+    } catch (err) {
+      showToast('Erro ao salvar valores: ' + translateError(err.message));
     }
   };
 
@@ -311,7 +393,7 @@ export default function App() {
         showToast('Despesa lançada');
       }
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
     }
   };
 
@@ -329,7 +411,7 @@ export default function App() {
       setState((p) => ({ admins: [...p.admins, created], showAddAdmin: false }));
       showToast('Administrador adicionado');
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
     }
   };
 
@@ -360,7 +442,7 @@ export default function App() {
       }));
       showToast(`Pagamento confirmado — ${ids.length} fatura${ids.length === 1 ? '' : 's'} quitada${ids.length === 1 ? '' : 's'}`);
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
     }
   };
   const copyPix = () => {
@@ -380,7 +462,7 @@ export default function App() {
       await exportReportPdf({ periodLabel, stats, expenses, associados });
       showToast('Relatório em PDF baixado');
     } catch (err) {
-      showToast('Erro ao gerar PDF: ' + err.message);
+      showToast('Erro ao gerar PDF: ' + translateError(err.message));
     }
   };
   const exportCsv = () => {
@@ -388,7 +470,7 @@ export default function App() {
       exportReportCsv({ periodLabel, stats, expenses, associados });
       showToast('Relatório em CSV baixado');
     } catch (err) {
-      showToast('Erro ao gerar CSV: ' + err.message);
+      showToast('Erro ao gerar CSV: ' + translateError(err.message));
     }
   };
 
@@ -404,6 +486,22 @@ export default function App() {
     setState({ showViewProfile: false, showEditProfile: true, editingAssociadoId: id, editProfileDraft: { name: p.name, email: p.email, phone: p.phone, address: p.address, unit: p.unit } });
   };
   const closeEditProfile = () => setState({ showEditProfile: false, editingAssociadoId: null });
+  const resetAssociadoPassword = (name, email) => {
+    if (!email || email === '—') { showToast('Esse associado não tem e-mail cadastrado.'); return; }
+    askConfirm({
+      title: 'Redefinir senha?',
+      message: `Vamos enviar um e-mail para ${email} com um link para ${name} criar uma nova senha.`,
+      confirmLabel: 'Enviar e-mail',
+      onConfirm: async () => {
+        try {
+          await sendPasswordReset(email);
+          showToast(`E-mail de redefinição enviado para ${name}`);
+        } catch (err) {
+          showToast('Erro ao enviar redefinição: ' + translateError(err.message));
+        }
+      },
+    });
+  };
   const setEditProfileName = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, name: e.target.value } }));
   const setEditProfileEmail = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, email: e.target.value } }));
   const setEditProfilePhone = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, phone: e.target.value } }));
@@ -421,7 +519,7 @@ export default function App() {
       }));
       showToast('Perfil atualizado');
     } catch (err) {
-      showToast('Erro: ' + err.message);
+      showToast('Erro: ' + translateError(err.message));
     }
   };
 
@@ -453,7 +551,7 @@ export default function App() {
       onValueBlur: (e) => {
         const v = parseFloat(e.target.value) || 0;
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, value: v } : x)) }));
-        updateAssociado(a.id, { value: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+        updateAssociado(a.id, { value: v }).catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
       },
       dueDateColor: isAtrasado ? 'oklch(50% 0.18 25)' : 'oklch(20% 0.02 230)',
       dueDateBorder: isAtrasado ? 'oklch(75% 0.1 25)' : 'oklch(89% 0.01 230)',
@@ -463,13 +561,24 @@ export default function App() {
       },
       onConsumptionBlur: (e) => {
         const v = Number(e.target.value) || 0;
-        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v } : x)) }));
-        updateAssociado(a.id, { consumption: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+        // calcula o valor mensal automaticamente a partir do consumo: o
+        // maior entre o valor mínimo e (consumo × valor por m³), mais os
+        // custos extras configurados em "Configurar valores"
+        const computedValue = calcBillingValue(v, s.billingSettings);
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v, value: computedValue } : x)) }));
+        updateAssociado(a.id, { consumption: v, value: computedValue }).catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
       },
       onDelete: () => {
-        if (!window.confirm(`Remover ${a.name}? Isso apaga também o histórico de faturas dele(a). Essa ação não pode ser desfeita.`)) return;
-        setState((p) => ({ associados: p.associados.filter((x) => x.id !== a.id) }));
-        deleteAssociado(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+        askConfirm({
+          title: `Remover ${a.name}?`,
+          message: 'Isso apaga também o histórico de faturas dele(a). Essa ação não pode ser desfeita.',
+          confirmLabel: 'Remover',
+          danger: true,
+          onConfirm: () => {
+            setState((p) => ({ associados: p.associados.filter((x) => x.id !== a.id) }));
+            deleteAssociado(a.id).catch((err) => showToast('Erro ao remover: ' + translateError(err.message)));
+          },
+        });
       },
       onDueDateChange: (e) => {
         const v = e.target.value;
@@ -477,7 +586,7 @@ export default function App() {
       },
       onDueDateBlur: (e) => {
         const v = e.target.value;
-        updateAssociado(a.id, { dueDate: v }).catch((err) => showToast('Erro ao salvar: ' + err.message));
+        updateAssociado(a.id, { dueDate: v }).catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
       },
       showCobrar: !isPago && !sameMonth(a.lastChargeSentAt),
       showEnviado: !isPago && sameMonth(a.lastChargeSentAt),
@@ -494,9 +603,16 @@ export default function App() {
     ...e,
     valueFmt: brl(e.value),
     onDelete: () => {
-      if (!window.confirm(`Remover a despesa "${e.description}"? Essa ação não pode ser desfeita.`)) return;
-      setState((p) => ({ despesas: p.despesas.filter((x) => x.id !== e.id) }));
-      deleteDespesa(e.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+      askConfirm({
+        title: 'Remover despesa?',
+        message: `"${e.description}" será removida. Essa ação não pode ser desfeita.`,
+        confirmLabel: 'Remover',
+        danger: true,
+        onConfirm: () => {
+          setState((p) => ({ despesas: p.despesas.filter((x) => x.id !== e.id) }));
+          deleteDespesa(e.id).catch((err) => showToast('Erro ao remover: ' + translateError(err.message)));
+        },
+      });
     },
     onEdit: () => openEditExpense(e),
   }));
@@ -504,9 +620,16 @@ export default function App() {
     ...a,
     initials: initials(a.name),
     onDelete: () => {
-      if (!window.confirm(`Remover ${a.name} da lista de administradores?`)) return;
-      setState((p) => ({ admins: p.admins.filter((x) => x.id !== a.id) }));
-      deleteAdmin(a.id).catch((err) => showToast('Erro ao remover: ' + err.message));
+      askConfirm({
+        title: 'Remover administrador?',
+        message: `${a.name} perde o acesso administrativo ao sistema.`,
+        confirmLabel: 'Remover',
+        danger: true,
+        onConfirm: () => {
+          setState((p) => ({ admins: p.admins.filter((x) => x.id !== a.id) }));
+          deleteAdmin(a.id).catch((err) => showToast('Erro ao remover: ' + translateError(err.message)));
+        },
+      });
     },
   }));
 
@@ -666,7 +789,10 @@ export default function App() {
   }
 
   if (!s.session) {
-    return <Login isMobile={isMobile} doSignIn={doSignIn} doSignUp={doSignUp} />;
+    if (s.authView === 'cadastro') {
+      return <Cadastro isMobile={isMobile} doSignUp={doSignUp} goLogin={goLoginView} />;
+    }
+    return <Login isMobile={isMobile} doSignIn={doSignIn} goCadastro={goCadastro} />;
   }
 
   if (!s.profile) {
@@ -686,6 +812,7 @@ export default function App() {
         assocPage={s.assocPage}
         goAdminDashboard={goAdminDashboard}
         goAdminAssociados={goAdminAssociados}
+        goAdminCobranca={goAdminCobranca}
         goAdminDespesas={goAdminDespesas}
         goAdminAdministradores={goAdminAdministradores}
         goAdminRelatorios={goAdminRelatorios}
@@ -703,7 +830,7 @@ export default function App() {
         {s.dataLoading && <p style={{ fontSize: 13, color: 'oklch(52% 0.01 230)' }}>Carregando dados...</p>}
 
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'dashboard' && (
-          <Dashboard isMobile={isMobile} stats={stats} revenueBars={revenueBars} donutSegments={donutSegments} overdueList={overdueList} goAdminAssociados={goAdminAssociados} />
+          <Dashboard isMobile={isMobile} stats={stats} revenueBars={revenueBars} donutSegments={donutSegments} overdueList={overdueList} goAdminCobranca={goAdminCobranca} />
         )}
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'associados' && (
           <Associados
@@ -716,10 +843,24 @@ export default function App() {
             nextDisabled={currentPage >= totalPages - 1}
             goAssociadoPrevPage={goAssociadoPrevPage}
             goAssociadoNextPage={goAssociadoNextPage}
+            openAddAssociado={openAddAssociado}
+          />
+        )}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'cobranca' && (
+          <Cobranca
+            isMobile={isMobile}
+            associadosFull={associadosPage}
+            associadoSearch={s.associadoSearch}
+            setAssociadoSearch={setAssociadoSearch}
+            pageLabel={pageLabel}
+            prevDisabled={currentPage <= 0}
+            nextDisabled={currentPage >= totalPages - 1}
+            goAssociadoPrevPage={goAssociadoPrevPage}
+            goAssociadoNextPage={goAssociadoNextPage}
             generateMonthlyCharges={generateMonthlyCharges}
             openBulkDueDate={openBulkDueDate}
             cobrarTodos={cobrarTodos}
-            openAddAssociado={openAddAssociado}
+            openBillingSettings={openBillingSettings}
           />
         )}
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && <Despesas expenses={expenses} openAddExpense={openAddExpense} />}
@@ -765,6 +906,7 @@ export default function App() {
           data={viewProfileData}
           close={closeViewProfile}
           edit={viewProfileData ? () => openAdminEditAssociado(viewProfileData.id) : null}
+          resetPassword={viewProfileData ? () => resetAssociadoPassword(viewProfileData.name, viewProfileData.email) : null}
         />
       )}
 
@@ -800,6 +942,21 @@ export default function App() {
         <BulkDueDateModal width={modalWidth} bulkDueDate={s.bulkDueDate} setBulkDueDate={setBulkDueDate} close={closeBulkDueDate} confirm={confirmBulkDueDate} />
       )}
 
+      {s.showBillingSettings && (
+        <BillingSettingsModal
+          width={modalWidth}
+          draft={s.billingSettingsDraft}
+          setMinValue={setBillingMinValue}
+          setPricePerM3={setBillingPricePerM3}
+          setExtraChargeLabel={setExtraChargeLabel}
+          setExtraChargeValue={setExtraChargeValue}
+          addExtraCharge={addExtraCharge}
+          removeExtraCharge={removeExtraCharge}
+          close={closeBillingSettings}
+          confirm={confirmBillingSettings}
+        />
+      )}
+
       {s.showAddExpense && (
         <AddExpenseModal
           width={modalWidth}
@@ -816,6 +973,18 @@ export default function App() {
 
       {s.showAddAdmin && (
         <AddAdminModal width={modalWidth} newAdmin={s.newAdmin} setName={setNewAdminName} setEmail={setNewAdminEmail} setCargo={setNewAdminCargo} close={closeAddAdmin} confirm={confirmAddAdmin} />
+      )}
+
+      {s.confirmDialog && (
+        <ConfirmModal
+          width={modalWidth}
+          title={s.confirmDialog.title}
+          message={s.confirmDialog.message}
+          confirmLabel={s.confirmDialog.confirmLabel}
+          danger={s.confirmDialog.danger}
+          close={closeConfirm}
+          confirm={runConfirm}
+        />
       )}
     </div>
   );

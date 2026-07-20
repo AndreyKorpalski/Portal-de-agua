@@ -23,7 +23,7 @@ function csvRow(cells) {
 
 export function exportReportCsv({ periodLabel, stats, expenses, associados }) {
   const lines = [];
-  lines.push(csvRow(['Relatório financeiro — Associação das Águas']));
+  lines.push(csvRow(['Relatório financeiro — Portal Amolina']));
   lines.push(csvRow([periodLabel]));
   lines.push('');
   lines.push(csvRow(['Total arrecadado', stats.arrecadadoFmt]));
@@ -60,7 +60,7 @@ export async function exportReportPdf({ periodLabel, stats, expenses, associados
   const doc = new jsPDF();
 
   doc.setFontSize(16);
-  doc.text('Associação das Águas', 14, 18);
+  doc.text('Portal Amolina', 14, 18);
   doc.setFontSize(11);
   doc.setTextColor(90);
   doc.text(`Relatório financeiro — ${periodLabel}`, 14, 25);

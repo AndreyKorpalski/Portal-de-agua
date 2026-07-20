@@ -1,4 +1,4 @@
-# Associação das Águas
+# Portal Amolina
 
 Sistema de gestão para associações de água — cobranças, pagamentos e despesas, com áreas separadas para administradores e associados.
 
@@ -41,7 +41,7 @@ O botão "Cobrar" manda um e-mail de verdade para o associado, via [Resend](http
    ```bash
    supabase link --project-ref <seu-project-ref>   # o ref está na Project URL: https://<ref>.supabase.co
    supabase secrets set RESEND_API_KEY=re_xxxxxxxx
-   supabase secrets set COBRANCA_FROM_EMAIL="Associação das Águas <cobranca@seudominio.com.br>"
+   supabase secrets set COBRANCA_FROM_EMAIL="Portal Amolina <cobranca@seudominio.com.br>"
    supabase functions deploy send-cobranca
    ```
 5. Pronto — os botões "Cobrar" e "Cobrar todos" já passam a enviar e-mail de verdade.

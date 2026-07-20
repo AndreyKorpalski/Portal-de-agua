@@ -14,25 +14,13 @@ function clearValidity(e) {
   e.target.setCustomValidity('');
 }
 
-export default function Login({ isMobile, doSignIn, goCadastro }) {
-  const [role, setRole] = useState('admin'); // 'admin' | 'associado'
+export default function Cadastro({ isMobile, doSignUp, goLogin }) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
-
-  const tabBtn = (active) => ({
-    flex: 1,
-    padding: '9px',
-    borderRadius: 8,
-    border: 'none',
-    background: active ? '#fff' : 'transparent',
-    color: active ? 'oklch(30% 0.09 220)' : 'oklch(50% 0.01 230)',
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-    boxShadow: active ? '0 1px 3px oklch(30% 0.05 230 / 0.15)' : 'none',
-  });
+  const [notice, setNotice] = useState(null);
 
   const loginGridStyle = {
     width: '100%',
@@ -58,9 +46,15 @@ export default function Login({ isMobile, doSignIn, goCadastro }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setSubmitting(true);
     try {
-      await doSignIn({ email, password, role });
+      const result = await doSignUp({ email, password, name, role: 'associado' });
+      if (!result?.session) {
+        setNotice('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
+      } else {
+        goLogin();
+      }
     } catch (err) {
       setError(translateError(err.message));
     } finally {
@@ -97,24 +91,29 @@ export default function Login({ isMobile, doSignIn, goCadastro }) {
                 <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '.01em' }}>Portal Amolina</span>
               </div>
               <h1 style={{ fontSize: 32, lineHeight: 1.25, fontWeight: 800, margin: '0 0 16px' }}>
-                Gestão simples e transparente da sua associação de água.
+                Cadastro de associado
               </h1>
               <p style={{ fontSize: 14.5, lineHeight: 1.6, color: 'oklch(88% 0.03 220)', maxWidth: 340, margin: 0 }}>
-                Acompanhe cobranças, pagamentos e despesas em um só lugar — para administradores e associados.
+                Crie sua conta para acompanhar suas cobranças e pagamentos.
               </p>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} style={{ padding: '48px 40px', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', background: 'oklch(95% 0.01 230)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
-            <button type="button" onClick={() => setRole('admin')} style={tabBtn(role === 'admin')}>
-              Administrador
-            </button>
-            <button type="button" onClick={() => setRole('associado')} style={tabBtn(role === 'associado')}>
-              Associado
-            </button>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'oklch(18% 0.02 230)' }}>Criar minha conta</div>
+            <div style={{ fontSize: 12.5, color: 'oklch(52% 0.01 230)', marginTop: 3 }}>Cadastro exclusivo para associados</div>
           </div>
+
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>Nome completo</label>
+          <input
+            value={name}
+            onChange={(e) => { clearValidity(e); setName(e.target.value); }}
+            onInvalid={handleInvalid}
+            required
+            style={inputStyle}
+          />
 
           <label style={{ fontSize: 12.5, fontWeight: 600, color: 'oklch(35% 0.02 230)', marginBottom: 6 }}>E-mail</label>
           <input
@@ -122,7 +121,7 @@ export default function Login({ isMobile, doSignIn, goCadastro }) {
             value={email}
             onChange={(e) => { clearValidity(e); setEmail(e.target.value); }}
             onInvalid={handleInvalid}
-            placeholder={role === 'admin' ? 'admin@associacao.org' : 'associado@email.com'}
+            placeholder="associado@email.com"
             required
             style={inputStyle}
           />
@@ -144,6 +143,11 @@ export default function Login({ isMobile, doSignIn, goCadastro }) {
               {error}
             </p>
           )}
+          {notice && (
+            <p style={{ fontSize: 12.5, color: 'oklch(38% 0.13 150)', background: 'oklch(94% 0.04 150)', borderRadius: 8, padding: '8px 11px', margin: '0 0 14px' }}>
+              {notice}
+            </p>
+          )}
 
           <button
             type="submit"
@@ -161,18 +165,16 @@ export default function Login({ isMobile, doSignIn, goCadastro }) {
               marginBottom: 14,
             }}
           >
-            {submitting ? 'Aguarde...' : 'Entrar'}
+            {submitting ? 'Aguarde...' : 'Criar conta'}
           </button>
 
-          {role === 'associado' && (
-            <button
-              type="button"
-              onClick={goCadastro}
-              style={{ background: 'none', border: 'none', color: 'oklch(45% 0.13 230)', fontSize: 12.5, textAlign: 'center', cursor: 'pointer' }}
-            >
-              Ainda não tem conta? Cadastre-se
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={goLogin}
+            style={{ background: 'none', border: 'none', color: 'oklch(45% 0.13 230)', fontSize: 12.5, textAlign: 'center', cursor: 'pointer' }}
+          >
+            Já tem conta? Entrar
+          </button>
         </form>
       </div>
     </div>

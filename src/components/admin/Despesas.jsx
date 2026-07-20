@@ -1,3 +1,5 @@
+import { TrashIcon } from '../icons';
+
 const GRID_COLS = '0.9fr 2fr 1fr 0.9fr 0.8fr';
 
 export default function Despesas({ expenses, openAddExpense }) {
@@ -78,8 +80,13 @@ export default function Despesas({ expenses, openAddExpense }) {
                 <button onClick={exp.onEdit} style={{ background: 'none', border: 'none', color: 'oklch(32% 0.08 220)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                   Editar
                 </button>
-                <button onClick={exp.onDelete} style={{ background: 'none', border: 'none', color: 'oklch(55% 0.01 230)', cursor: 'pointer', fontSize: 12 }}>
-                  Remover
+                <button
+                  onClick={exp.onDelete}
+                  title="Remover despesa"
+                  aria-label="Remover despesa"
+                  style={{ background: 'none', border: 'none', color: 'oklch(55% 0.01 230)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}
+                >
+                  <TrashIcon />
                 </button>
               </div>
             </div>

@@ -1,4 +1,4 @@
--- Associação das Águas — schema do banco de dados (Supabase / Postgres)
+-- Portal Amolina — schema do banco de dados (Supabase / Postgres)
 --
 -- Como aplicar: Supabase Dashboard → SQL Editor → cole este arquivo inteiro → Run.
 -- (ou via CLI: supabase db push)
@@ -80,6 +80,23 @@ create index if not exists faturas_associado_id_idx on faturas (associado_id);
 -- impede gerar a mesma cobrança do mês duas vezes para o mesmo associado
 create unique index if not exists faturas_associado_month_unique on faturas (associado_id, month);
 
+-- ============================================================
+-- billing_settings: valores usados para calcular a cobrança
+-- automaticamente a partir do consumo (linha única, id = 1).
+-- extra_charges é uma lista de custos fixos somados a toda
+-- cobrança, ex: [{"label": "Taxa de manutenção", "value": 5}]
+-- ============================================================
+create table if not exists billing_settings (
+  id int primary key default 1,
+  min_value numeric(10,2) not null default 12,
+  price_per_m3 numeric(10,2) not null default 3,
+  extra_charges jsonb not null default '[]'::jsonb,
+  constraint billing_settings_singleton check (id = 1)
+);
+
+insert into billing_settings (id) values (1)
+  on conflict (id) do nothing;
+
 -- impede cadastrar dois associados com o mesmo e-mail (permite múltiplos
 -- registros sem e-mail definido, representado pelo placeholder '—')
 create unique index if not exists associados_email_unique on associados (email) where email <> '—' and email <> '';
@@ -108,6 +125,7 @@ alter table admins enable row level security;
 alter table associados enable row level security;
 alter table despesas enable row level security;
 alter table faturas enable row level security;
+alter table billing_settings enable row level security;
 
 -- profiles: cada usuário vê/edita o próprio perfil; admin vê todos
 create policy "profiles_select_own_or_admin" on profiles
@@ -148,6 +166,10 @@ create policy "faturas_update" on faturas
   );
 create policy "faturas_delete_admin" on faturas
   for delete using (is_admin());
+
+-- billing_settings: somente admin (usado pra calcular o valor da cobrança)
+create policy "billing_settings_all_admin" on billing_settings
+  for all using (is_admin()) with check (is_admin());
 
 -- ============================================================
 -- Trigger: cria o profile (e vincula/cria o associado ou admin)
