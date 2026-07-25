@@ -1,6 +1,17 @@
 import { TrashIcon } from '../icons';
 
-export default function Administradores({ isMobile, admins, openAddAdmin }) {
+export default function Administradores({
+  isMobile,
+  admins,
+  adminSearch,
+  setAdminSearch,
+  pageLabel,
+  prevDisabled,
+  nextDisabled,
+  goAdminListPrevPage,
+  goAdminListNextPage,
+  openAddAdmin,
+}) {
   const adminsGridStyle = { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 14 };
 
   return (
@@ -32,9 +43,25 @@ export default function Administradores({ isMobile, admins, openAddAdmin }) {
           + Adicionar administrador
         </button>
       </div>
-      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 20px' }}>
+      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 16px' }}>
         Gerencie quem tem acesso administrativo ao sistema
       </p>
+
+      <input
+        value={adminSearch}
+        onChange={setAdminSearch}
+        placeholder="Buscar por nome ou e-mail..."
+        style={{
+          width: '100%',
+          maxWidth: 360,
+          boxSizing: 'border-box',
+          border: '1.5px solid oklch(89% 0.01 230)',
+          borderRadius: 9,
+          padding: '10px 14px',
+          fontSize: 13,
+          marginBottom: 16,
+        }}
+      />
 
       <div style={adminsGridStyle}>
         {admins.map((adm) => (
@@ -82,6 +109,43 @@ export default function Administradores({ isMobile, admins, openAddAdmin }) {
             </button>
           </div>
         ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+        <span style={{ fontSize: 12, color: 'oklch(52% 0.01 230)' }}>{pageLabel}</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={goAdminListPrevPage}
+            disabled={prevDisabled}
+            style={{
+              background: '#fff',
+              border: '1px solid oklch(89% 0.01 230)',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'oklch(35% 0.02 230)',
+              cursor: 'pointer',
+            }}
+          >
+            Anterior
+          </button>
+          <button
+            onClick={goAdminListNextPage}
+            disabled={nextDisabled}
+            style={{
+              background: '#fff',
+              border: '1px solid oklch(89% 0.01 230)',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'oklch(35% 0.02 230)',
+              cursor: 'pointer',
+            }}
+          >
+            Próxima
+          </button>
+        </div>
       </div>
     </>
   );

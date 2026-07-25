@@ -33,3 +33,8 @@ export async function sendPasswordReset(email) {
   });
   if (error) throw error;
 }
+
+export async function updateAuthEmail(email) {
+  const { error } = await supabase.auth.updateUser({ email });
+  if (error) throw error;
+}

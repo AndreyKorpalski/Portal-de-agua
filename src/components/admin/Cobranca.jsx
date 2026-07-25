@@ -2,11 +2,20 @@ import { CheckIcon } from '../icons';
 
 const GRID_COLS = '1.8fr 1.1fr 0.9fr 0.8fr 0.8fr 0.8fr 1fr';
 
+const STATUS_FILTER_OPTIONS = [
+  { value: 'todos', label: 'Todos os status' },
+  { value: 'pago', label: 'Pago' },
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'atrasado', label: 'Atrasado' },
+];
+
 export default function Cobranca({
   isMobile,
   associadosFull,
   associadoSearch,
   setAssociadoSearch,
+  statusFilter,
+  setStatusFilter,
   pageLabel,
   prevDisabled,
   nextDisabled,
@@ -71,21 +80,40 @@ export default function Cobranca({
         Defina o valor mensal, registre o consumo de água e envie cobranças
       </p>
 
-      <input
-        value={associadoSearch}
-        onChange={setAssociadoSearch}
-        placeholder="Buscar por nome, unidade ou e-mail..."
-        style={{
-          width: '100%',
-          maxWidth: 360,
-          boxSizing: 'border-box',
-          border: '1.5px solid oklch(89% 0.01 230)',
-          borderRadius: 9,
-          padding: '10px 14px',
-          fontSize: 13,
-          marginBottom: 16,
-        }}
-      />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <input
+          value={associadoSearch}
+          onChange={setAssociadoSearch}
+          placeholder="Buscar por nome, unidade ou e-mail..."
+          style={{
+            flex: '1 1 260px',
+            maxWidth: 360,
+            boxSizing: 'border-box',
+            border: '1.5px solid oklch(89% 0.01 230)',
+            borderRadius: 9,
+            padding: '10px 14px',
+            fontSize: 13,
+          }}
+        />
+        <select
+          value={statusFilter}
+          onChange={setStatusFilter}
+          style={{
+            border: '1.5px solid oklch(89% 0.01 230)',
+            borderRadius: 9,
+            padding: '9px 12px',
+            fontSize: 13,
+            background: '#fff',
+            color: 'oklch(25% 0.02 230)',
+          }}
+        >
+          {STATUS_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div style={{ background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, overflowX: 'auto' }}>
         <div style={{ minWidth: 780 }}>

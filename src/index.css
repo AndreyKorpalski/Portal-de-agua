@@ -20,6 +20,11 @@
   }
 }
 
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
 * {
   box-sizing: border-box;
 }

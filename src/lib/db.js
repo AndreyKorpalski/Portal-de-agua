@@ -24,6 +24,7 @@ function mapDespesa(row) {
   return {
     id: row.id,
     date: isoToShort(row.date),
+    dateIso: row.date,
     description: row.description,
     category: row.category,
     value: Number(row.value),

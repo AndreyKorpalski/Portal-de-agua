@@ -2,7 +2,17 @@ import { TrashIcon } from '../icons';
 
 const GRID_COLS = '0.9fr 2fr 1fr 0.9fr 0.8fr';
 
-export default function Despesas({ expenses, openAddExpense }) {
+export default function Despesas({
+  expenses,
+  despesaSearch,
+  setDespesaSearch,
+  pageLabel,
+  prevDisabled,
+  nextDisabled,
+  goDespesaPrevPage,
+  goDespesaNextPage,
+  openAddExpense,
+}) {
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -23,7 +33,23 @@ export default function Despesas({ expenses, openAddExpense }) {
           + Lançar despesa
         </button>
       </div>
-      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 20px' }}>Registre os gastos da associação</p>
+      <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)', margin: '0 0 16px' }}>Registre os gastos da associação</p>
+
+      <input
+        value={despesaSearch}
+        onChange={setDespesaSearch}
+        placeholder="Buscar por descrição ou categoria..."
+        style={{
+          width: '100%',
+          maxWidth: 360,
+          boxSizing: 'border-box',
+          border: '1.5px solid oklch(89% 0.01 230)',
+          borderRadius: 9,
+          padding: '10px 14px',
+          fontSize: 13,
+          marginBottom: 16,
+        }}
+      />
 
       <div style={{ background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, overflowX: 'auto' }}>
         <div style={{ minWidth: 760 }}>
@@ -91,6 +117,43 @@ export default function Despesas({ expenses, openAddExpense }) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+        <span style={{ fontSize: 12, color: 'oklch(52% 0.01 230)' }}>{pageLabel}</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={goDespesaPrevPage}
+            disabled={prevDisabled}
+            style={{
+              background: '#fff',
+              border: '1px solid oklch(89% 0.01 230)',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'oklch(35% 0.02 230)',
+              cursor: 'pointer',
+            }}
+          >
+            Anterior
+          </button>
+          <button
+            onClick={goDespesaNextPage}
+            disabled={nextDisabled}
+            style={{
+              background: '#fff',
+              border: '1px solid oklch(89% 0.01 230)',
+              borderRadius: 7,
+              padding: '6px 12px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: 'oklch(35% 0.02 230)',
+              cursor: 'pointer',
+            }}
+          >
+            Próxima
+          </button>
         </div>
       </div>
     </>

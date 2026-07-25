@@ -3,6 +3,7 @@ import Login from './components/Login';
 import Cadastro from './components/Cadastro';
 import Sidebar from './components/Sidebar';
 import Toast from './components/Toast';
+import Skeleton from './components/Skeleton';
 import Dashboard from './components/admin/Dashboard';
 import Associados from './components/admin/Associados';
 import Cobranca from './components/admin/Cobranca';
@@ -26,7 +27,7 @@ import { sameMonth, MONTH_NAMES_PT } from './utils/date';
 import { mapWithConcurrency } from './utils/concurrency';
 import { calcBillingValue } from './utils/billing';
 import { supabase } from './lib/supabaseClient';
-import { signIn, signUp, signOut, fetchProfile, sendPasswordReset } from './lib/auth';
+import { signIn, signUp, signOut, fetchProfile, sendPasswordReset, updateAuthEmail } from './lib/auth';
 import {
   fetchAssociados, insertAssociado, updateAssociado, deleteAssociado,
   fetchDespesas, insertDespesa, updateDespesa, deleteDespesa,
@@ -59,6 +60,10 @@ const INITIAL_STATE = {
   newExpense: { description: '', category: 'Manutenção', value: '' },
   editingExpenseId: null,
   associadoSearch: '', associadoPage: 0, associadoPageSize: 5,
+  despesaSearch: '', despesaPage: 0, despesaPageSize: 8,
+  adminSearch: '', adminListPage: 0, adminListPageSize: 8,
+  relatorioPeriod: '', relatorioAssociadoId: null,
+  cobrancaStatusFilter: 'todos',
   isMobile: false,
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
   showBulkDueDate: false, bulkDueDate: '10/08',
@@ -78,6 +83,10 @@ const BLANK_UI_STATE = {
   newExpense: { description: '', category: 'Manutenção', value: '' },
   editingExpenseId: null,
   associadoSearch: '', associadoPage: 0,
+  despesaSearch: '', despesaPage: 0,
+  adminSearch: '', adminListPage: 0,
+  relatorioPeriod: '', relatorioAssociadoId: null,
+  cobrancaStatusFilter: 'todos',
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
   showBulkDueDate: false, bulkDueDate: '10/08',
   showViewProfile: false, viewProfileId: null,
@@ -222,8 +231,15 @@ export default function App() {
   const setPayBoleto = () => setState({ payMethod: 'boleto' });
 
   const setAssociadoSearch = (e) => setState({ associadoSearch: e.target.value, associadoPage: 0 });
+  const setCobrancaStatusFilter = (e) => setState({ cobrancaStatusFilter: e.target.value, associadoPage: 0 });
   const goAssociadoPrevPage = () => setState((p) => ({ associadoPage: Math.max(0, p.associadoPage - 1) }));
   const goAssociadoNextPage = () => setState((p) => ({ associadoPage: p.associadoPage + 1 }));
+  const setDespesaSearch = (e) => setState({ despesaSearch: e.target.value, despesaPage: 0 });
+  const goDespesaPrevPage = () => setState((p) => ({ despesaPage: Math.max(0, p.despesaPage - 1) }));
+  const goDespesaNextPage = () => setState((p) => ({ despesaPage: p.despesaPage + 1 }));
+  const setAdminSearch = (e) => setState({ adminSearch: e.target.value, adminListPage: 0 });
+  const goAdminListPrevPage = () => setState((p) => ({ adminListPage: Math.max(0, p.adminListPage - 1) }));
+  const goAdminListNextPage = () => setState((p) => ({ adminListPage: p.adminListPage + 1 }));
 
   // --- associados (admin) ---
   const openAddAssociado = () => setState({ showAddAssociado: true, newAssociado: { name: '', unit: '', email: '', value: s.billingSettings.minValue } });
@@ -494,11 +510,12 @@ export default function App() {
   };
   const downloadBoleto = () => showToast('Download do boleto iniciado');
   const now = new Date();
-  const periodLabel = `${MONTH_NAMES_PT[now.getMonth()]} de ${now.getFullYear()}`;
+  const setRelatorioPeriod = (e) => setState({ relatorioPeriod: e.target.value });
+  const setRelatorioAssociado = (e) => setState({ relatorioAssociadoId: e.target.value ? Number(e.target.value) : null });
   const exportPdf = async () => {
     try {
       showToast('Gerando PDF...');
-      await exportReportPdf({ periodLabel, stats, expenses, associados });
+      await exportReportPdf({ periodLabel: isAllPeriods ? 'Todos os períodos' : selectedPeriod, stats: reportStats, expenses: expensesInPeriod, associados });
       showToast('Relatório em PDF baixado');
     } catch (err) {
       showToast('Erro ao gerar PDF: ' + translateError(err.message));
@@ -506,7 +523,7 @@ export default function App() {
   };
   const exportCsv = () => {
     try {
-      exportReportCsv({ periodLabel, stats, expenses, associados });
+      exportReportCsv({ periodLabel: isAllPeriods ? 'Todos os períodos' : selectedPeriod, stats: reportStats, expenses: expensesInPeriod, associados });
       showToast('Relatório em CSV baixado');
     } catch (err) {
       showToast('Erro ao gerar CSV: ' + translateError(err.message));
@@ -548,6 +565,9 @@ export default function App() {
   const setEditProfileUnit = (e) => setState((p) => ({ editProfileDraft: { ...p.editProfileDraft, unit: e.target.value } }));
   const saveEditProfile = async () => {
     if (!s.editingAssociadoId) return;
+    const isAdminEditing = s.profile.role === 'admin';
+    const before = s.associados.find((x) => x.id === s.editingAssociadoId) || s.ownAssociado;
+    const emailChanged = before && before.email !== s.editProfileDraft.email;
     try {
       const updated = await updateAssociado(s.editingAssociadoId, s.editProfileDraft);
       setState((p) => ({
@@ -556,7 +576,18 @@ export default function App() {
         ownAssociado: p.ownAssociado && p.ownAssociado.id === updated.id ? updated : p.ownAssociado,
         associados: p.associados.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)),
       }));
-      showToast('Perfil atualizado');
+      if (emailChanged && !isAdminEditing) {
+        try {
+          await updateAuthEmail(s.editProfileDraft.email);
+          showToast('Perfil atualizado. Enviamos um e-mail de confirmação — seu login só passa a usar o novo e-mail depois que você confirmar.');
+        } catch (err) {
+          showToast('Perfil atualizado, mas não foi possível atualizar o e-mail de login: ' + translateError(err.message));
+        }
+      } else if (emailChanged && isAdminEditing) {
+        showToast('Perfil atualizado. Atenção: o e-mail de login desse associado não muda automaticamente — peça para ele trocar em "Meu perfil".');
+      } else {
+        showToast('Perfil atualizado');
+      }
     } catch (err) {
       showToast('Erro: ' + translateError(err.message));
     }
@@ -674,6 +705,83 @@ export default function App() {
     },
   }));
 
+  const despesaSearchQ = s.despesaSearch.trim().toLowerCase();
+  const expensesFiltered = despesaSearchQ
+    ? expenses.filter((e) => e.description.toLowerCase().includes(despesaSearchQ) || e.category.toLowerCase().includes(despesaSearchQ))
+    : expenses;
+  const despesaPageSize = s.despesaPageSize;
+  const despesaTotalPages = Math.max(1, Math.ceil(expensesFiltered.length / despesaPageSize));
+  const despesaCurrentPage = Math.min(s.despesaPage, despesaTotalPages - 1);
+  const expensesPage = expensesFiltered.slice(despesaCurrentPage * despesaPageSize, despesaCurrentPage * despesaPageSize + despesaPageSize);
+  const despesaPageLabel = `Página ${despesaCurrentPage + 1} de ${despesaTotalPages} · ${expensesFiltered.length} despesa(s)`;
+
+  const adminSearchQ = s.adminSearch.trim().toLowerCase();
+  const adminsFiltered = adminSearchQ
+    ? admins.filter((a) => a.name.toLowerCase().includes(adminSearchQ) || a.email.toLowerCase().includes(adminSearchQ))
+    : admins;
+  const adminListPageSize = s.adminListPageSize;
+  const adminTotalPages = Math.max(1, Math.ceil(adminsFiltered.length / adminListPageSize));
+  const adminCurrentPage = Math.min(s.adminListPage, adminTotalPages - 1);
+  const adminsPage = adminsFiltered.slice(adminCurrentPage * adminListPageSize, adminCurrentPage * adminListPageSize + adminListPageSize);
+  const adminPageLabel = `Página ${adminCurrentPage + 1} de ${adminTotalPages} · ${adminsFiltered.length} administrador(es)`;
+
+  // --- relatórios: período selecionável (mês/ano) + extrato por associado ---
+  const periodToSortKey = (label) => {
+    const [monthName, year] = label.split('/');
+    const idx = MONTH_NAMES_PT.indexOf(monthName);
+    return Number(year) * 12 + (idx === -1 ? 0 : idx);
+  };
+  const currentMonthLabel = `${MONTH_NAMES_PT[now.getMonth()]}/${now.getFullYear()}`;
+  const despesaPeriodOf = (e) => {
+    if (!e.dateIso) return currentMonthLabel;
+    const [y, m] = e.dateIso.split('-');
+    return `${MONTH_NAMES_PT[Number(m) - 1]}/${y}`;
+  };
+  const periodSet = new Set([currentMonthLabel]);
+  s.allFaturas.forEach((f) => periodSet.add(f.month));
+  expenses.forEach((e) => periodSet.add(despesaPeriodOf(e)));
+  const periodOptions = [
+    { value: '__all__', label: 'Todos os períodos' },
+    ...[...periodSet].sort((a, b) => periodToSortKey(b) - periodToSortKey(a)).map((p) => ({ value: p, label: p })),
+  ];
+  const selectedPeriod = s.relatorioPeriod || currentMonthLabel;
+  const isAllPeriods = selectedPeriod === '__all__';
+  const faturasInPeriod = isAllPeriods ? s.allFaturas : s.allFaturas.filter((f) => f.month === selectedPeriod);
+  const arrecadadoPeriod = faturasInPeriod.filter((f) => f.status === 'pago').reduce((sum, f) => sum + f.value, 0);
+  const expensesInPeriod = isAllPeriods ? expenses : expenses.filter((e) => despesaPeriodOf(e) === selectedPeriod);
+  const gastoPeriod = expensesInPeriod.reduce((sum, e) => sum + e.value, 0);
+  const saldoPeriod = arrecadadoPeriod - gastoPeriod;
+  const reportStats = {
+    arrecadadoFmt: brl(arrecadadoPeriod),
+    gastoFmt: brl(gastoPeriod),
+    saldoFmt: brl(saldoPeriod),
+    saldoColor: saldoPeriod >= 0 ? 'oklch(38% 0.13 150)' : 'oklch(45% 0.15 25)',
+  };
+  const despesasPorCategoria = Object.values(
+    expensesInPeriod.reduce((acc, e) => {
+      if (!acc[e.category]) acc[e.category] = { category: e.category, total: 0 };
+      acc[e.category].total += e.value;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b.total - a.total)
+    .map((c) => ({ ...c, totalFmt: brl(c.total) }));
+
+  const associadosOptions = s.associados.map((a) => ({ id: a.id, name: a.name }));
+  const extratoAssociado = s.relatorioAssociadoId
+    ? s.allFaturas
+        .filter((f) => f.associadoId === s.relatorioAssociadoId)
+        .sort((a, b) => periodToSortKey(b.month) - periodToSortKey(a.month))
+        .map((f) => ({
+          id: f.id,
+          month: f.month,
+          valueFmt: brl(f.value),
+          statusLabel: STATUS_META[f.status] ? STATUS_META[f.status].label : f.status,
+          dueDate: f.dueDate,
+          paidAtFmt: f.paidAt ? new Date(f.paidAt).toLocaleDateString('pt-BR') : '—',
+        }))
+    : [];
+
   const arrecadado = associados.filter((a) => a.status === 'pago').reduce((sum, a) => sum + a.value, 0);
   const gasto = expenses.reduce((sum, e) => sum + e.value, 0);
   const saldo = arrecadado - gasto;
@@ -701,7 +809,7 @@ export default function App() {
     entry.sum += f.value;
     revenueByMonth.set(key, entry);
   });
-  const revenueMonths = Array.from(revenueByMonth.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(-6);
+  const revenueMonths = Array.from(revenueByMonth.values()).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(-12);
   const maxRev = Math.max(...revenueMonths.map((m) => m.sum), 1);
   const revenueBars = revenueMonths.map((m, i) => ({
     month: m.label,
@@ -737,6 +845,12 @@ export default function App() {
   const currentPage = Math.min(s.associadoPage, totalPages - 1);
   const associadosPage = associadosFiltered.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
   const pageLabel = `Página ${currentPage + 1} de ${totalPages} · ${associadosFiltered.length} associado(s)`;
+
+  const cobrancaFiltered = s.cobrancaStatusFilter === 'todos' ? associadosFiltered : associadosFiltered.filter((a) => a.status === s.cobrancaStatusFilter);
+  const cobrancaTotalPages = Math.max(1, Math.ceil(cobrancaFiltered.length / pageSize));
+  const cobrancaCurrentPage = Math.min(s.associadoPage, cobrancaTotalPages - 1);
+  const cobrancaPage = cobrancaFiltered.slice(cobrancaCurrentPage * pageSize, cobrancaCurrentPage * pageSize + pageSize);
+  const cobrancaPageLabel = `Página ${cobrancaCurrentPage + 1} de ${cobrancaTotalPages} · ${cobrancaFiltered.length} associado(s)`;
 
   const isMobile = s.isMobile;
   const modalWidth = isMobile ? '92vw' : '400px';
@@ -779,16 +893,25 @@ export default function App() {
   const selectedTotal = selectedInvoices.filter((i) => i.checked).reduce((sum, i) => sum + i._total, 0);
   const selectedTotalFmt = brl(selectedTotal);
 
-  const paymentHistory = s.faturas
-    .filter((f) => f.status === 'pago')
-    .map((f) => ({
-      ref: f.month,
-      valueFmt: brl(f.value),
-      method: f.paymentMethod === 'boleto' ? 'Boleto' : f.paymentMethod === 'pix' ? 'Pix' : '—',
-      statusLabel: 'Pago',
-      statusBg: STATUS_META.pago.bg,
-      statusColor: STATUS_META.pago.color,
-    }));
+  const dueDateSortKey = (dueDate) => {
+    const [d, m, y] = dueDate.split('/');
+    return `${y}-${m}-${d}`;
+  };
+  const paymentHistory = [...s.faturas]
+    .sort((a, b) => (dueDateSortKey(a.dueDate) < dueDateSortKey(b.dueDate) ? 1 : -1))
+    .map((f) => {
+      const meta = STATUS_META[f.status] || STATUS_META.pendente;
+      return {
+        ref: f.month,
+        valueFmt: brl(f.value),
+        method: f.paymentMethod === 'boleto' ? 'Boleto' : f.paymentMethod === 'pix' ? 'Pix' : '—',
+        dueDate: f.dueDate,
+        paidAtFmt: f.paidAt ? new Date(f.paidAt).toLocaleDateString('pt-BR') : '—',
+        statusLabel: meta.label,
+        statusBg: meta.bg,
+        statusColor: meta.color,
+      };
+    });
 
   const qrCells = Array.from({ length: 100 }, (_, i) => {
     const row = Math.floor(i / 10);
@@ -868,7 +991,7 @@ export default function App() {
       />
 
       <main style={mainStyle}>
-        {s.dataLoading && <p style={{ fontSize: 13, color: 'oklch(52% 0.01 230)' }}>Carregando dados...</p>}
+        {s.dataLoading && <Skeleton rows={6} />}
 
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'dashboard' && (
           <Dashboard isMobile={isMobile} stats={stats} revenueBars={revenueBars} donutSegments={donutSegments} overdueList={overdueList} goAdminCobranca={goAdminCobranca} />
@@ -890,12 +1013,14 @@ export default function App() {
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'cobranca' && (
           <Cobranca
             isMobile={isMobile}
-            associadosFull={associadosPage}
+            associadosFull={cobrancaPage}
             associadoSearch={s.associadoSearch}
             setAssociadoSearch={setAssociadoSearch}
-            pageLabel={pageLabel}
-            prevDisabled={currentPage <= 0}
-            nextDisabled={currentPage >= totalPages - 1}
+            statusFilter={s.cobrancaStatusFilter}
+            setStatusFilter={setCobrancaStatusFilter}
+            pageLabel={cobrancaPageLabel}
+            prevDisabled={cobrancaCurrentPage <= 0}
+            nextDisabled={cobrancaCurrentPage >= cobrancaTotalPages - 1}
             goAssociadoPrevPage={goAssociadoPrevPage}
             goAssociadoNextPage={goAssociadoNextPage}
             generateMonthlyCharges={generateMonthlyCharges}
@@ -905,10 +1030,47 @@ export default function App() {
             openBillingSettings={openBillingSettings}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && <Despesas expenses={expenses} openAddExpense={openAddExpense} />}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'administradores' && <Administradores isMobile={isMobile} admins={admins} openAddAdmin={openAddAdmin} />}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && (
+          <Despesas
+            expenses={expensesPage}
+            despesaSearch={s.despesaSearch}
+            setDespesaSearch={setDespesaSearch}
+            pageLabel={despesaPageLabel}
+            prevDisabled={despesaCurrentPage <= 0}
+            nextDisabled={despesaCurrentPage >= despesaTotalPages - 1}
+            goDespesaPrevPage={goDespesaPrevPage}
+            goDespesaNextPage={goDespesaNextPage}
+            openAddExpense={openAddExpense}
+          />
+        )}
+        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'administradores' && (
+          <Administradores
+            isMobile={isMobile}
+            admins={adminsPage}
+            adminSearch={s.adminSearch}
+            setAdminSearch={setAdminSearch}
+            pageLabel={adminPageLabel}
+            prevDisabled={adminCurrentPage <= 0}
+            nextDisabled={adminCurrentPage >= adminTotalPages - 1}
+            goAdminListPrevPage={goAdminListPrevPage}
+            goAdminListNextPage={goAdminListNextPage}
+            openAddAdmin={openAddAdmin}
+          />
+        )}
         {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'relatorios' && (
-          <Relatorios periodLabel={periodLabel} stats={stats} exportPdf={exportPdf} exportCsv={exportCsv} />
+          <Relatorios
+            periodOptions={periodOptions}
+            selectedPeriod={selectedPeriod}
+            setRelatorioPeriod={setRelatorioPeriod}
+            stats={reportStats}
+            despesasPorCategoria={despesasPorCategoria}
+            associadosOptions={associadosOptions}
+            selectedAssociadoId={s.relatorioAssociadoId}
+            setRelatorioAssociado={setRelatorioAssociado}
+            extratoAssociado={extratoAssociado}
+            exportPdf={exportPdf}
+            exportCsv={exportCsv}
+          />
         )}
 
         {!s.dataLoading && s.profile.role === 'associado' && !assocProfile && (

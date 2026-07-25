@@ -280,6 +280,61 @@ create trigger sync_associado_status_trigger
   for each row execute function sync_associado_status();
 
 -- ============================================================
+-- Geração automática das cobranças do mês: roda todo dia 1 via
+-- pg_cron, gerando a fatura de cada associado que ainda não tem
+-- cobrança no mês corrente (equivalente ao botão "Gerar cobranças
+-- do mês", mas sem depender de um admin clicar).
+-- ============================================================
+create or replace function month_label_pt(d date)
+returns text
+language sql
+immutable
+as $$
+  select (array['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'])[extract(month from d)::int]
+    || '/' || extract(year from d)::text;
+$$;
+
+create or replace function generate_monthly_faturas()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_label text := month_label_pt(current_date);
+  rec record;
+  due_day int;
+  due date;
+begin
+  for rec in
+    select a.id, a.monthly_value, a.due_date
+    from associados a
+    where not exists (select 1 from faturas f where f.associado_id = a.id and f.month = current_label)
+  loop
+    due_day := coalesce(nullif(split_part(rec.due_date, '/', 1), '')::int, 10);
+    due := make_date(extract(year from current_date)::int, extract(month from current_date)::int, least(due_day, 28));
+    insert into faturas (associado_id, month, value, due_date, status)
+    values (rec.id, current_label, rec.monthly_value, due, 'pendente')
+    on conflict (associado_id, month) do nothing;
+  end loop;
+end;
+$$;
+
+-- Agenda a função acima para rodar todo dia 1 às 06:00 UTC.
+-- Exige a extensão pg_cron habilitada (Database > Extensions no
+-- painel do Supabase, ou "create extension pg_cron;").
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 'generate-monthly-faturas') then
+      perform cron.unschedule('generate-monthly-faturas');
+    end if;
+    perform cron.schedule('generate-monthly-faturas', '0 6 1 * *', $$select generate_monthly_faturas();$$);
+  end if;
+end;
+$$;
+
+-- ============================================================
 -- Trigger: impede que um associado altere, no próprio registro,
 -- campos que só o admin deveria controlar (valor mensal, consumo,
 -- vencimento, unidade, vínculo de conta). status é liberado porque

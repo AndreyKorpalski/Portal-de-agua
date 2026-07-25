@@ -45,35 +45,37 @@ export default function Dashboard({ isMobile, stats, revenueBars, donutSegments,
       <div style={chartsGridStyle}>
         <div style={{ background: '#fff', border: '1px solid oklch(91% 0.008 230)', borderRadius: 14, padding: 22 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(25% 0.02 230)', marginBottom: 18 }}>
-            Arrecadação — últimos 6 meses
+            Arrecadação — últimos {revenueBars.length} meses
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 150 }}>
-            {revenueBars.map((bar, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 8,
-                  height: '100%',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'oklch(30% 0.02 230)' }}>{bar.valueFmt}</div>
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 150, minWidth: revenueBars.length * 38 }}>
+              {revenueBars.map((bar, i) => (
                 <div
+                  key={i}
                   style={{
-                    width: '100%',
-                    maxWidth: 34,
-                    borderRadius: '6px 6px 2px 2px',
-                    background: bar.color,
-                    height: `${bar.heightPct}%`,
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 8,
+                    height: '100%',
+                    justifyContent: 'flex-end',
                   }}
-                />
-                <div style={{ fontSize: 11, color: 'oklch(55% 0.01 230)' }}>{bar.month}</div>
-              </div>
-            ))}
+                >
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'oklch(30% 0.02 230)' }}>{bar.valueFmt}</div>
+                  <div
+                    style={{
+                      width: '100%',
+                      maxWidth: 34,
+                      borderRadius: '6px 6px 2px 2px',
+                      background: bar.color,
+                      height: `${bar.heightPct}%`,
+                    }}
+                  />
+                  <div style={{ fontSize: 11, color: 'oklch(55% 0.01 230)' }}>{bar.month}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
