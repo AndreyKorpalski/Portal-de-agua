@@ -50,10 +50,11 @@ const INITIAL_STATE = {
   dataLoading: false,
   associados: [], despesas: [], admins: [], allFaturas: [], // papel admin
   billingSettings: { minValue: 12, pricePerM3: 3, extraCharges: [] },
-  ownAssociado: null, faturas: [], // papel associado
+  ownAssociado: null, faturas: [], // papel associado (ou "Minha conta" de um admin)
 
   // navegação / UI
   adminPage: 'dashboard', assocPage: 'inicio', payMethod: 'pix',
+  viewMode: 'admin', // 'admin' | 'associado' — só importa pra quem tem papel admin
   toast: null,
   showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
   newAssociado: { name: '', unit: '', email: '', value: 80 },
@@ -77,6 +78,7 @@ const INITIAL_STATE = {
 
 const BLANK_UI_STATE = {
   adminPage: 'dashboard', assocPage: 'inicio', payMethod: 'pix',
+  viewMode: 'admin',
   toast: null,
   showAddAssociado: false, showAddExpense: false, showAddAdmin: false,
   newAssociado: { name: '', unit: '', email: '', value: 80 },
@@ -170,11 +172,15 @@ export default function App() {
     (async () => {
       try {
         if (s.profile.role === 'admin') {
-          const [associados, despesas, admins, allFaturas, billingSettings] = await Promise.all([
-            fetchAssociados(), fetchDespesas(), fetchAdmins(), fetchFaturas(), fetchBillingSettings(),
+          const [associados, despesas, admins, allFaturas, billingSettings, own] = await Promise.all([
+            fetchAssociados(), fetchDespesas(), fetchAdmins(), fetchFaturas(), fetchBillingSettings(), fetchOwnAssociado(s.profile.id),
           ]);
           if (!active) return;
-          setState({ associados, despesas, admins, allFaturas, billingSettings, dataLoading: false });
+          // todo admin também é morador (paga água) — carrega a fatura dele
+          // igual carregaria pra um associado comum, pra alimentar a seção "Minha conta"
+          const faturas = own ? await fetchFaturasByAssociado(own.id) : [];
+          if (!active) return;
+          setState({ associados, despesas, admins, allFaturas, billingSettings, ownAssociado: own, faturas, dataLoading: false });
         } else {
           const own = await fetchOwnAssociado(s.profile.id);
           if (!active) return;
@@ -218,15 +224,15 @@ export default function App() {
   };
 
   // --- navegação ---
-  const goAdminDashboard = () => setState({ adminPage: 'dashboard' });
-  const goAdminAssociados = () => setState({ adminPage: 'associados' });
-  const goAdminCobranca = () => setState({ adminPage: 'cobranca' });
-  const goAdminDespesas = () => setState({ adminPage: 'despesas' });
-  const goAdminAdministradores = () => setState({ adminPage: 'administradores' });
-  const goAdminRelatorios = () => setState({ adminPage: 'relatorios' });
-  const goAssocInicio = () => setState({ assocPage: 'inicio' });
-  const goAssocPagar = () => setState({ assocPage: 'pagar' });
-  const goAssocHistorico = () => setState({ assocPage: 'historico' });
+  const goAdminDashboard = () => setState({ adminPage: 'dashboard', viewMode: 'admin' });
+  const goAdminAssociados = () => setState({ adminPage: 'associados', viewMode: 'admin' });
+  const goAdminCobranca = () => setState({ adminPage: 'cobranca', viewMode: 'admin' });
+  const goAdminDespesas = () => setState({ adminPage: 'despesas', viewMode: 'admin' });
+  const goAdminAdministradores = () => setState({ adminPage: 'administradores', viewMode: 'admin' });
+  const goAdminRelatorios = () => setState({ adminPage: 'relatorios', viewMode: 'admin' });
+  const goAssocInicio = () => setState({ assocPage: 'inicio', viewMode: 'associado' });
+  const goAssocPagar = () => setState({ assocPage: 'pagar', viewMode: 'associado' });
+  const goAssocHistorico = () => setState({ assocPage: 'historico', viewMode: 'associado' });
   const setPayPix = () => setState({ payMethod: 'pix' });
   const setPayBoleto = () => setState({ payMethod: 'boleto' });
 
@@ -939,7 +945,10 @@ export default function App() {
   const currentUserName = s.profile?.name || '';
   const currentUserFirstName = (assocProfile?.name || s.profile?.name || '').split(' ')[0];
   const currentUserRoleLabel = s.profile?.role === 'admin' ? 'Administrador' : 'Associado';
-  const sidebarProfileClick = s.profile?.role === 'associado' ? openEditProfile : () => {};
+  const sidebarProfileClick = s.ownAssociado ? openEditProfile : () => {};
+  const hasOwnAssociado = !!s.ownAssociado;
+  const inAdminArea = s.profile?.role === 'admin' && s.viewMode === 'admin';
+  const inAssocArea = s.profile?.role === 'associado' || (s.profile?.role === 'admin' && s.viewMode === 'associado');
 
   const expenseModalTitle = s.editingExpenseId ? 'Editar despesa' : 'Lançar despesa';
   const expenseConfirmLabel = s.editingExpenseId ? 'Salvar' : 'Lançar';
@@ -972,6 +981,8 @@ export default function App() {
       <Sidebar
         isMobile={isMobile}
         role={s.profile.role}
+        viewMode={s.viewMode}
+        showMinhaConta={s.profile.role === 'admin' && hasOwnAssociado}
         adminPage={s.adminPage}
         assocPage={s.assocPage}
         goAdminDashboard={goAdminDashboard}
@@ -993,10 +1004,10 @@ export default function App() {
       <main style={mainStyle}>
         {s.dataLoading && <Skeleton rows={6} />}
 
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'dashboard' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'dashboard' && (
           <Dashboard isMobile={isMobile} stats={stats} revenueBars={revenueBars} donutSegments={donutSegments} overdueList={overdueList} goAdminCobranca={goAdminCobranca} />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'associados' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'associados' && (
           <Associados
             isMobile={isMobile}
             associadosFull={associadosPage}
@@ -1010,7 +1021,7 @@ export default function App() {
             openAddAssociado={openAddAssociado}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'cobranca' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'cobranca' && (
           <Cobranca
             isMobile={isMobile}
             associadosFull={cobrancaPage}
@@ -1030,7 +1041,7 @@ export default function App() {
             openBillingSettings={openBillingSettings}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'despesas' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'despesas' && (
           <Despesas
             expenses={expensesPage}
             despesaSearch={s.despesaSearch}
@@ -1043,7 +1054,7 @@ export default function App() {
             openAddExpense={openAddExpense}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'administradores' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'administradores' && (
           <Administradores
             isMobile={isMobile}
             admins={adminsPage}
@@ -1057,7 +1068,7 @@ export default function App() {
             openAddAdmin={openAddAdmin}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'admin' && s.adminPage === 'relatorios' && (
+        {!s.dataLoading && inAdminArea && s.adminPage === 'relatorios' && (
           <Relatorios
             periodOptions={periodOptions}
             selectedPeriod={selectedPeriod}
@@ -1073,15 +1084,15 @@ export default function App() {
           />
         )}
 
-        {!s.dataLoading && s.profile.role === 'associado' && !assocProfile && (
+        {!s.dataLoading && inAssocArea && !assocProfile && (
           <p style={{ fontSize: 13.5, color: 'oklch(52% 0.01 230)' }}>
             Sua conta ainda não está vinculada a nenhuma unidade. Peça para um administrador te cadastrar como associado com este mesmo e-mail.
           </p>
         )}
-        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'inicio' && (
+        {!s.dataLoading && inAssocArea && assocProfile && s.assocPage === 'inicio' && (
           <Inicio isMobile={isMobile} currentUserFirstName={currentUserFirstName} currentInvoice={currentInvoice} assocProfile={assocProfile} invoicesList={invoicesList} goPagarTodas={goPagarTodas} />
         )}
-        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'pagar' && (
+        {!s.dataLoading && inAssocArea && assocProfile && s.assocPage === 'pagar' && (
           <Pagar
             selectedInvoices={selectedInvoices}
             selectedTotalFmt={selectedTotalFmt}
@@ -1099,7 +1110,7 @@ export default function App() {
             confirmPayment={confirmPayment}
           />
         )}
-        {!s.dataLoading && s.profile.role === 'associado' && assocProfile && s.assocPage === 'historico' && <Historico paymentHistory={paymentHistory} />}
+        {!s.dataLoading && inAssocArea && assocProfile && s.assocPage === 'historico' && <Historico paymentHistory={paymentHistory} />}
       </main>
 
       <Toast message={s.toast} />

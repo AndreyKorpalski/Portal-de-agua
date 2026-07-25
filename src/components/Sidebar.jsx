@@ -14,6 +14,8 @@ import {
 export default function Sidebar({
   isMobile,
   role,
+  viewMode,
+  showMinhaConta,
   adminPage,
   assocPage,
   goAdminDashboard,
@@ -65,6 +67,15 @@ export default function Sidebar({
     flex: 'none',
   };
 
+  const sectionLabelStyle = {
+    fontSize: '10.5px',
+    fontWeight: 700,
+    color: 'oklch(58% 0.01 230)',
+    textTransform: 'uppercase',
+    letterSpacing: '.04em',
+    padding: '10px 12px 4px',
+  };
+
   const navBtn = (active) => ({
     display: 'flex',
     alignItems: 'center',
@@ -92,32 +103,54 @@ export default function Sidebar({
       </div>
 
       {role === 'admin' && (
-        <nav style={sidebarNavStyle}>
-          <button onClick={goAdminDashboard} style={navBtn(adminPage === 'dashboard')}>
-            <DashboardIcon />
-            Dashboard
-          </button>
-          <button onClick={goAdminAssociados} style={navBtn(adminPage === 'associados')}>
-            <AssociadosIcon />
-            Associados
-          </button>
-          <button onClick={goAdminCobranca} style={navBtn(adminPage === 'cobranca')}>
-            <CobrancaIcon />
-            Cobrança
-          </button>
-          <button onClick={goAdminDespesas} style={navBtn(adminPage === 'despesas')}>
-            <DespesasIcon />
-            Despesas
-          </button>
-          <button onClick={goAdminAdministradores} style={navBtn(adminPage === 'administradores')}>
-            <AdministradoresIcon />
-            Administradores
-          </button>
-          <button onClick={goAdminRelatorios} style={navBtn(adminPage === 'relatorios')}>
-            <RelatoriosIcon />
-            Relatórios
-          </button>
-        </nav>
+        <>
+          {showMinhaConta && <div style={sectionLabelStyle}>Administração</div>}
+          <nav style={sidebarNavStyle}>
+            <button onClick={goAdminDashboard} style={navBtn(viewMode === 'admin' && adminPage === 'dashboard')}>
+              <DashboardIcon />
+              Dashboard
+            </button>
+            <button onClick={goAdminAssociados} style={navBtn(viewMode === 'admin' && adminPage === 'associados')}>
+              <AssociadosIcon />
+              Associados
+            </button>
+            <button onClick={goAdminCobranca} style={navBtn(viewMode === 'admin' && adminPage === 'cobranca')}>
+              <CobrancaIcon />
+              Cobrança
+            </button>
+            <button onClick={goAdminDespesas} style={navBtn(viewMode === 'admin' && adminPage === 'despesas')}>
+              <DespesasIcon />
+              Despesas
+            </button>
+            <button onClick={goAdminAdministradores} style={navBtn(viewMode === 'admin' && adminPage === 'administradores')}>
+              <AdministradoresIcon />
+              Administradores
+            </button>
+            <button onClick={goAdminRelatorios} style={navBtn(viewMode === 'admin' && adminPage === 'relatorios')}>
+              <RelatoriosIcon />
+              Relatórios
+            </button>
+          </nav>
+          {showMinhaConta && (
+            <>
+              <div style={sectionLabelStyle}>Minha conta</div>
+              <nav style={sidebarNavStyle}>
+                <button onClick={goAssocInicio} style={navBtn(viewMode === 'associado' && assocPage === 'inicio')}>
+                  <InicioIcon />
+                  Início
+                </button>
+                <button onClick={goAssocPagar} style={navBtn(viewMode === 'associado' && assocPage === 'pagar')}>
+                  <PagarIcon />
+                  Pagar
+                </button>
+                <button onClick={goAssocHistorico} style={navBtn(viewMode === 'associado' && assocPage === 'historico')}>
+                  <HistoricoIcon />
+                  Histórico
+                </button>
+              </nav>
+            </>
+          )}
+        </>
       )}
 
       {role === 'associado' && (

@@ -216,6 +216,23 @@ begin
     end if;
 
     insert into public.profiles (id, role, name, email) values (new.id, 'admin', chosen_name, new.email);
+
+    -- todo administrador também é morador e paga água: vincula (ou cria)
+    -- o registro de associado dele, igual acontece no cadastro de associado
+    -- abaixo — alimenta a seção "Minha conta" no painel do admin
+    update public.associados
+      set profile_id = new.id
+      where id = (
+        select id from public.associados
+        where email = new.email and profile_id is null
+        order by id
+        limit 1
+      );
+
+    if not found then
+      insert into public.associados (profile_id, name, email)
+      values (new.id, chosen_name, new.email);
+    end if;
   else
     -- usa subquery com limit 1: mesmo que existam associados duplicados
     -- com o mesmo e-mail (cadastro errado do admin), só um é vinculado
@@ -244,6 +261,35 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- ============================================================
+-- Backfill: garante que todo administrador já existente também
+-- tenha um registro de associado vinculado (mesma lógica acima,
+-- só que pra quem já tinha conta antes dessa mudança). Seguro de
+-- rodar de novo — só age em quem ainda não tem associado vinculado.
+-- ============================================================
+do $$
+declare
+  adm record;
+begin
+  for adm in select profile_id, name, email from public.admins where profile_id is not null loop
+    if not exists (select 1 from public.associados where profile_id = adm.profile_id) then
+      update public.associados
+        set profile_id = adm.profile_id
+        where id = (
+          select id from public.associados
+          where email = adm.email and profile_id is null
+          order by id
+          limit 1
+        );
+
+      if not found then
+        insert into public.associados (profile_id, name, email) values (adm.profile_id, adm.name, adm.email);
+      end if;
+    end if;
+  end loop;
+end;
+$$;
 
 -- ============================================================
 -- Trigger: mantém associados.status sempre sincronizado com as
