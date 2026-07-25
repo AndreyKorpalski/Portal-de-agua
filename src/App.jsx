@@ -67,7 +67,7 @@ const INITIAL_STATE = {
   cobrancaStatusFilter: 'todos',
   isMobile: false,
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
-  showBulkDueDate: false, bulkDueDate: '10/08',
+  showBulkDueDate: false, bulkDueDate: '10',
   showViewProfile: false, viewProfileId: null,
   showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
@@ -90,7 +90,7 @@ const BLANK_UI_STATE = {
   relatorioPeriod: '', relatorioAssociadoId: null,
   cobrancaStatusFilter: 'todos',
   newAdmin: { name: '', email: '', cargo: 'Administrador Geral' },
-  showBulkDueDate: false, bulkDueDate: '10/08',
+  showBulkDueDate: false, bulkDueDate: '10',
   showViewProfile: false, viewProfileId: null,
   showEditProfile: false, editingAssociadoId: null, editProfileDraft: { name: '', email: '', phone: '', address: '', unit: '' },
   selectedInvoiceIds: {},
@@ -325,18 +325,27 @@ export default function App() {
 
   const openBulkDueDate = () => setState({ showBulkDueDate: true });
   const closeBulkDueDate = () => setState({ showBulkDueDate: false });
-  const setBulkDueDate = (e) => setState({ bulkDueDate: e.target.value });
-  const confirmBulkDueDate = async () => {
-    const d = s.bulkDueDate;
-    if (!d.trim()) return;
+  const setBulkDueDate = (e) => setState({ bulkDueDate: e.target.value.replace(/\D/g, '').slice(0, 2) });
+  const applyBulkDueDate = async () => {
+    const day = Math.min(31, Math.max(1, parseInt(s.bulkDueDate, 10) || 10));
+    const d = String(day);
     const prev = s.associados;
     setState((p) => ({ associados: p.associados.map((a) => ({ ...a, dueDate: d })), showBulkDueDate: false }));
     try {
       await Promise.all(prev.map((a) => updateAssociado(a.id, { dueDate: d })));
-      showToast(`Vencimento atualizado para ${d} em todos os associados`);
+      showToast(`Dia de vencimento alterado para ${d} — vale a partir da próxima cobrança gerada`);
     } catch (err) {
       showToast('Erro: ' + translateError(err.message));
     }
+  };
+  const confirmBulkDueDate = () => {
+    const day = Math.min(31, Math.max(1, parseInt(s.bulkDueDate, 10) || 10));
+    askConfirm({
+      title: 'Alterar dia de vencimento de todos?',
+      message: `O novo vencimento será todo dia ${day}. Isso só vale para as próximas cobranças geradas — as faturas pendentes deste mês não são alteradas.`,
+      confirmLabel: 'Alterar',
+      onConfirm: applyBulkDueDate,
+    });
   };
 
   const doGenerateMonthlyCharges = async () => {
@@ -658,12 +667,17 @@ export default function App() {
         });
       },
       onDueDateChange: (e) => {
-        const v = e.target.value;
+        const v = e.target.value.replace(/\D/g, '').slice(0, 2);
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, dueDate: v } : x)) }));
       },
       onDueDateBlur: (e) => {
-        const v = e.target.value;
-        updateAssociado(a.id, { dueDate: v }).catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
+        const day = Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 10));
+        const v = String(day);
+        setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, dueDate: v } : x)) }));
+        // só vale a partir da próxima cobrança gerada — não altera a fatura pendente já gerada
+        updateAssociado(a.id, { dueDate: v })
+          .then(() => showToast(`Dia de vencimento (${v}) salvo — vale a partir da próxima cobrança gerada`))
+          .catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
       },
       showCobrar: !isPago && !sameMonth(a.lastChargeSentAt),
       showEnviado: !isPago && sameMonth(a.lastChargeSentAt),

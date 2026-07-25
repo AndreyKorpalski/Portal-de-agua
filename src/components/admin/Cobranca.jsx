@@ -135,7 +135,7 @@ export default function Cobranca({
             <div>Unidade</div>
             <div>Valor mensal</div>
             <div>Consumo m³</div>
-            <div>Vencimento</div>
+            <div title="Dia do mês em que a próxima cobrança vence">Dia vcto.</div>
             <div>Status</div>
             <div>Cobrança</div>
           </div>
@@ -226,20 +226,25 @@ export default function Cobranca({
                   fontWeight: 600,
                 }}
               />
-              <input
-                value={assoc.dueDate}
-                onChange={assoc.onDueDateChange}
-                onBlur={assoc.onDueDateBlur}
-                style={{
-                  width: 50,
-                  border: `1px solid ${assoc.dueDateBorder}`,
-                  borderRadius: 7,
-                  padding: '5px 6px',
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: assoc.dueDateColor,
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 11.5, color: 'oklch(50% 0.01 230)' }}>Dia</span>
+                <input
+                  value={assoc.dueDate}
+                  onChange={assoc.onDueDateChange}
+                  onBlur={assoc.onDueDateBlur}
+                  inputMode="numeric"
+                  title="Dia do mês em que a próxima cobrança vence"
+                  style={{
+                    width: 40,
+                    border: `1px solid ${assoc.dueDateBorder}`,
+                    borderRadius: 7,
+                    padding: '5px 6px',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: assoc.dueDateColor,
+                  }}
+                />
+              </div>
               <div>
                 <span
                   style={{

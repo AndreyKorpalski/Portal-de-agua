@@ -42,7 +42,7 @@ create table if not exists associados (
   address text not null default '',
   monthly_value numeric(10,2) not null default 0,
   consumption numeric(10,2) not null default 0,
-  due_date text not null default '10/07',
+  due_date text not null default '10', -- dia do mês (o mês em si é sempre o da cobrança gerada)
   status text not null default 'pendente' check (status in ('pago', 'pendente', 'atrasado')),
   last_charge_sent_at timestamptz,
   created_at timestamptz not null default now()
@@ -409,3 +409,11 @@ drop trigger if exists protect_associado_fields_trigger on associados;
 create trigger protect_associado_fields_trigger
   before update on associados
   for each row execute function protect_associado_fields();
+
+-- ============================================================
+-- due_date passa a guardar só o dia do mês (o mês em si é sempre
+-- o mês em que a cobrança for gerada, nunca um valor fixo). Aqui
+-- normaliza os registros que ainda têm o formato antigo "DD/MM".
+-- ============================================================
+update associados set due_date = split_part(due_date, '/', 1) where due_date like '%/%';
+alter table associados alter column due_date set default '10';
