@@ -638,9 +638,9 @@ export default function App() {
       },
       onConsumptionBlur: (e) => {
         const v = Number(e.target.value) || 0;
-        // calcula o valor mensal automaticamente a partir do consumo: o
-        // maior entre o valor mínimo e (consumo × valor por m³), mais os
-        // custos extras configurados em "Configurar valores"
+        // calcula o valor mensal automaticamente a partir do consumo: taxa
+        // mínima + (consumo × valor por m³), mais os custos extras
+        // configurados em "Configurar valores"
         const computedValue = calcBillingValue(v, s.billingSettings);
         setState((p) => ({ associados: p.associados.map((x) => (x.id === a.id ? { ...x, consumption: v, value: computedValue } : x)) }));
         updateAssociado(a.id, { consumption: v, value: computedValue }).catch((err) => showToast('Erro ao salvar: ' + translateError(err.message)));
